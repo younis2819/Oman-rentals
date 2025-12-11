@@ -1,9 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { CheckCircle, Loader2, AlertCircle, Truck, MapPin } from 'lucide-react'
+import { CheckCircle, Loader2, AlertCircle, Truck, MapPin, User, Phone, Mail } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { checkAvailability, createBooking } from '@/app/actions' // Ensure this path is correct based on your folder structure
+import { checkAvailability, createBooking } from '@/app/actions'
 import Link from 'next/link'
 
 export default function BookingWidget({ 
@@ -27,14 +27,18 @@ export default function BookingWidget({
   const [dates, setDates] = useState({ start: '', end: '' })
   const [status, setStatus] = useState<'idle' | 'checking' | 'available' | 'busy' | 'submitting'>('idle')
   
-  // NEW: Delivery State
+  // Delivery State
   const [deliveryNeeded, setDeliveryNeeded] = useState(false)
   const [address, setAddress] = useState('')
+
+  // 👇 NEW: Guest Details State
+  const [guestName, setGuestName] = useState('')
+  const [guestPhone, setGuestPhone] = useState('')
+  const [guestEmail, setGuestEmail] = useState('')
 
   const handleCheck = async () => {
     if (!dates.start || !dates.end) return
     
-    // Sanity Check
     const startObj = new Date(dates.start)
     const endObj = new Date(dates.end)
     
@@ -50,15 +54,21 @@ export default function BookingWidget({
   }
 
   const handleBooking = async () => {
-    // Safety check: Should not be clickable if no user
-    if (!currentUser) return 
+    // 1. Validation Logic
+    const finalName = currentUser?.name || guestName
+    const finalPhone = currentUser?.phone || guestPhone
+    const finalEmail = guestEmail // Only used if guest
 
-    // Calculate Estimated Total for UI display only (Server does real math)
-    const start = new Date(dates.start)
-    const end = new Date(dates.end)
-    const diffMs = end.getTime() - start.getTime()
-    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24)) || 1
-    const total = days * rate
+    // If guest, ensure all fields are filled
+    if (!currentUser && (!finalName || !finalPhone || !finalEmail)) {
+        alert("Please fill in all your details to continue.")
+        return
+    }
+
+    if (deliveryNeeded && !address) {
+        alert("Please enter a delivery address.")
+        return
+    }
 
     setStatus('submitting')
 
@@ -67,11 +77,15 @@ export default function BookingWidget({
     formData.append('tenantId', tenantId)
     formData.append('startDate', dates.start)
     formData.append('endDate', dates.end)
-    formData.append('dailyRate', rate.toString()) // Backend needs this to calculate price
-    formData.append('customerName', currentUser.name)
-    formData.append('customerPhone', currentUser.phone)
+    formData.append('dailyRate', rate.toString())
     
-    // NEW: Delivery Data
+    // 👇 NEW: Handle User vs Guest Data
+    formData.append('customerName', finalName)
+    formData.append('customerPhone', finalPhone)
+    if (!currentUser) {
+        formData.append('customerEmail', finalEmail) // Pass email to actions for Resend
+    }
+    
     formData.append('deliveryNeeded', deliveryNeeded.toString())
     formData.append('deliveryAddress', address)
 
@@ -83,18 +97,13 @@ export default function BookingWidget({
       return
     }
 
-    // --- THE FORK: Paymob vs Quote ---
-
-    // 1. Redirect to Paymob (Self Pickup)
+    // Redirect Logic
     if (result.paymentRequired && result.paymentToken) {
-        // Use your Test Frame ID from .env
         const frameId = process.env.NEXT_PUBLIC_PAYMOB_FRAME_ID 
         window.location.href = `https://accept.paymob.com/api/acceptance/iframes/${frameId}?payment_token=${result.paymentToken}`
         return
     }
 
-    // 2. Quote Request (Delivery Needed) - Go to Success Page
-    // We append a flag so the success page can show "Waiting for Quote" text
     router.push(`/booking/success?id=${result.bookingId}&status=quote_requested`)
     setStatus('idle') 
   }
@@ -167,7 +176,7 @@ export default function BookingWidget({
             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Available!
           </div>
 
-          {/* --- NEW: DELIVERY TOGGLE --- */}
+          {/* --- DELIVERY TOGGLE --- */}
           <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
              <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
@@ -186,67 +195,94 @@ export default function BookingWidget({
                <div className="mt-3 animate-in slide-in-from-top-2">
                   <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Site Address / Location</label>
                   <div className="flex items-center bg-white border border-gray-300 rounded-lg overflow-hidden">
-                     <div className="p-3 bg-gray-100 border-r border-gray-300"><MapPin className="w-4 h-4 text-gray-500"/></div>
-                     <input 
-                       type="text" 
-                       placeholder="e.g. Muscat, Al Khoud, Site #4"
-                       className="w-full p-2 text-sm outline-none"
-                       value={address}
-                       onChange={(e) => setAddress(e.target.value)}
-                     />
+                      <div className="p-3 bg-gray-100 border-r border-gray-300"><MapPin className="w-4 h-4 text-gray-500"/></div>
+                      <input 
+                        type="text" 
+                        placeholder="e.g. Muscat, Al Khoud, Site #4"
+                        className="w-full p-2 text-sm outline-none"
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                      />
                   </div>
                   <p className="text-[10px] text-orange-600 mt-2 font-medium">
-                     * Vendor will quote delivery fee separately.
+                      * Vendor will quote delivery fee separately.
                   </p>
                </div>
              )}
           </div>
 
-          {/* LOGIC SPLIT: Registered vs Guest */}
-          {currentUser ? (
-             <div className="space-y-4">
-                {/* 1. Show Summary */}
-                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 text-sm">
-                    <div className="flex justify-between items-center mb-1">
-                        <span className="text-gray-500 text-xs font-bold uppercase">Booking As</span>
-                        <Link href="/profile" className="text-blue-600 text-xs hover:underline">Change</Link>
-                    </div>
-                    <p className="font-bold text-gray-900 text-base">{currentUser.name}</p>
-                    <p className="text-gray-600">{currentUser.phone}</p>
-                </div>
+          {/* 👇 GUEST / USER FORM SECTION */}
+          <div className="space-y-4">
+               {currentUser ? (
+                   // LOGGED IN USER VIEW
+                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 text-sm">
+                       <div className="flex justify-between items-center mb-1">
+                           <span className="text-gray-500 text-xs font-bold uppercase">Booking As</span>
+                           <Link href="/profile" className="text-blue-600 text-xs hover:underline">Change</Link>
+                       </div>
+                       <p className="font-bold text-gray-900 text-base">{currentUser.name}</p>
+                       <p className="text-gray-600">{currentUser.phone}</p>
+                   </div>
+               ) : (
+                   // GUEST INPUT VIEW
+                   <div className="space-y-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                       <h4 className="text-sm font-bold text-gray-900 mb-2">Your Details</h4>
+                       
+                       <div className="flex items-center bg-white border border-gray-300 rounded-lg overflow-hidden">
+                           <div className="p-2.5 bg-gray-100 border-r border-gray-300"><User className="w-4 h-4 text-gray-400"/></div>
+                           <input 
+                               type="text" 
+                               placeholder="Full Name" 
+                               className="w-full p-2 text-sm outline-none"
+                               value={guestName}
+                               onChange={e => setGuestName(e.target.value)}
+                           />
+                       </div>
 
-                {/* 2. Confirm Button (UPDATED UI) */}
-                <button 
-                    onClick={handleBooking}
-                    disabled={status === 'submitting' || (deliveryNeeded && !address)}
-                    className="w-full py-4 rounded-xl text-white font-bold flex justify-center items-center gap-2 shadow-xl hover:brightness-110 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                    style={{ backgroundColor: 'black' }}
-                >
-                    {status === 'submitting' ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                    <>
-                        {deliveryNeeded ? (
-                            <><CheckCircle className="w-5 h-5" /> Request Quote</>
-                        ) : (
-                            <><CheckCircle className="w-5 h-5" /> Pay Now</>
-                        )}
-                    </>
-                    )}
-                </button>
-             </div>
-          ) : (
-            /* 3. Force Login (No Guest Checkout) */
-            <div className="text-center p-6 border border-gray-200 rounded-xl bg-gray-50">
-                <p className="text-sm text-gray-600 mb-4 font-medium">To finalize your booking, please log in.</p>
-                <Link 
-                    href="/login"
-                    className="block w-full py-3 rounded-xl bg-gray-900 text-white font-bold text-sm hover:bg-black transition-all shadow-sm text-center"
-                >
-                    Login to Continue
-                </Link>
-            </div>
-          )}
+                       <div className="flex items-center bg-white border border-gray-300 rounded-lg overflow-hidden">
+                           <div className="p-2.5 bg-gray-100 border-r border-gray-300"><Phone className="w-4 h-4 text-gray-400"/></div>
+                           <input 
+                               type="text" 
+                               placeholder="WhatsApp Number" 
+                               className="w-full p-2 text-sm outline-none"
+                               value={guestPhone}
+                               onChange={e => setGuestPhone(e.target.value)}
+                           />
+                       </div>
+
+                       <div className="flex items-center bg-white border border-gray-300 rounded-lg overflow-hidden">
+                           <div className="p-2.5 bg-gray-100 border-r border-gray-300"><Mail className="w-4 h-4 text-gray-400"/></div>
+                           <input 
+                               type="email" 
+                               placeholder="Email Address (for receipt)" 
+                               className="w-full p-2 text-sm outline-none"
+                               value={guestEmail}
+                               onChange={e => setGuestEmail(e.target.value)}
+                           />
+                       </div>
+                   </div>
+               )}
+
+               <button 
+                   onClick={handleBooking}
+                   disabled={status === 'submitting'}
+                   className="w-full py-4 rounded-xl text-white font-bold flex justify-center items-center gap-2 shadow-xl hover:brightness-110 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                   style={{ backgroundColor: 'black' }}
+               >
+                   {status === 'submitting' ? (
+                   <Loader2 className="w-5 h-5 animate-spin" />
+                   ) : (
+                   <>
+                       {deliveryNeeded ? (
+                           <><CheckCircle className="w-5 h-5" /> Request Quote</>
+                       ) : (
+                           <><CheckCircle className="w-5 h-5" /> Pay Now</>
+                       )}
+                   </>
+                   )}
+               </button>
+          </div>
+          
         </div>
       )}
     </div>

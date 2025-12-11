@@ -5,6 +5,8 @@ import { Car } from '@/types'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { getPaymobPaymentKey } from '@/utils/paymob' 
+// 👇 1. Import the email utility
+import { sendBookingConfirmation } from '@/utils/send-email'
 
 // --- 1. Get Rental Companies ---
 export async function getRentalCompanies() {
@@ -110,7 +112,6 @@ export async function createBooking(formData: FormData) {
   const totalOmr = days * baseRate
   const priceInSmallestUnit = totalOmr * 1000 
 
-  // 👇 FIX: Explicitly cast these to string to prevent 'null' errors later
   const customerName = formData.get('customerName') as string || "Guest User"
   const customerPhone = formData.get('customerPhone') as string
   
@@ -128,10 +129,11 @@ export async function createBooking(formData: FormData) {
     user_id: user ? user.id : null 
   }
 
+  // 👇 UPDATE: Select fleet details (make, model) to use in the email
   const { data: booking, error } = await supabase
     .from('bookings')
     .insert(rawData)
-    .select()
+    .select('*, fleet(make, model)') 
     .single()
   
   if (error) {
@@ -139,12 +141,27 @@ export async function createBooking(formData: FormData) {
     return { success: false, error: error.message }
   }
 
+  // 👇 2. FIRE EMAIL (Fire & Forget)
+  try {
+      const emailToSend = user?.email || (formData.get('customerEmail') as string) // Note: Ensure your widget captures email if guest
+      if (emailToSend) {
+        // We construct the car name safely
+        // @ts-ignore
+        const carName = booking.fleet ? `${booking.fleet.make} ${booking.fleet.model}` : 'Vehicle'
+        const refId = booking.id.slice(0, 8).toUpperCase()
+        
+        // Call the utility function (no await needed, let it run in background)
+        sendBookingConfirmation(emailToSend, customerName, refId, carName)
+      }
+  } catch (err) {
+      console.error('Email trigger error (non-blocking):', err)
+  }
+
   if (deliveryNeeded) {
     return { success: true, bookingId: booking.id, paymentRequired: false }
   }
 
   if (!deliveryNeeded) {
-    // 👇 FIX: Use the safe variables created above
     const paymentToken = await getPaymobPaymentKey(priceInSmallestUnit, {
       bookingId: booking.id,
       email: user?.email || "guest@omanrentals.com",

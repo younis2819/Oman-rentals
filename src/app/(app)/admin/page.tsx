@@ -1,4 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
+// 👇 1. ADD THIS IMPORT
+import { redirect } from 'next/navigation' 
 import { TrendingUp, CheckCircle, UserPlus, Phone, MessageCircle, FileText, ArrowRight, ShieldAlert, Truck, Calendar } from 'lucide-react'
 import { approveVendor } from './actions'
 import { Database } from '@/types/database.types' 
@@ -25,6 +27,25 @@ type BookingWithDetails = Database['public']['Tables']['bookings']['Row'] & {
 
 export default async function AdminDashboard() {
   const supabase = await createClient()
+
+  // 👇 2. SECURITY GUARD (Add this block)
+  // ---------------------------------------------------------
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  if (!user) {
+    return redirect('/login')
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role !== 'super_admin') {
+    return redirect('/') // Kick them out if not God Mode
+  }
+  // ---------------------------------------------------------
 
   const [bookingsResult, pendingTenantsResult] = await Promise.all([
     supabase
