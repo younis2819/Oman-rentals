@@ -1,7 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
-// 👇 1. ADD THIS IMPORT
 import { redirect } from 'next/navigation' 
-import { TrendingUp, CheckCircle, UserPlus, Phone, MessageCircle, FileText, ArrowRight, ShieldAlert, Truck, Calendar } from 'lucide-react'
+import { TrendingUp, CheckCircle, UserPlus, Phone, MessageCircle, FileText, ArrowRight, Truck, Calendar } from 'lucide-react' // 👈 Fixed: Removed ShieldAlert
 import { approveVendor } from './actions'
 import { Database } from '@/types/database.types' 
 import SignOutButton from '@/components/SignOutButton'
@@ -28,8 +27,7 @@ type BookingWithDetails = Database['public']['Tables']['bookings']['Row'] & {
 export default async function AdminDashboard() {
   const supabase = await createClient()
 
-  // 👇 2. SECURITY GUARD (Add this block)
-  // ---------------------------------------------------------
+  // 1. SECURITY GUARD
   const { data: { user } } = await supabase.auth.getUser()
   
   if (!user) {
@@ -43,25 +41,34 @@ export default async function AdminDashboard() {
     .single()
 
   if (profile?.role !== 'super_admin') {
-    return redirect('/') // Kick them out if not God Mode
+    return redirect('/') 
   }
-  // ---------------------------------------------------------
 
-  const [bookingsResult, pendingTenantsResult] = await Promise.all([
-    supabase
-      .from('bookings')
-      .select(`*, fleet ( make, model, year, base_rate, daily_rate_omr ), tenants ( name, whatsapp_number )`)
-      .order('created_at', { ascending: false })
-      .returns<BookingWithDetails[]>(), 
-    supabase
-      .from('tenants')
-      .select('*')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false })
-  ])
+  // 2. FETCH DATA (Wrapped in Try/Catch for stability)
+  let allBookings: BookingWithDetails[] = []
+  let pendingTenants: any[] = []
 
-  const allBookings = bookingsResult.data || []
-  const pendingTenants = pendingTenantsResult.data || []
+  try {
+    const [bookingsResult, pendingTenantsResult] = await Promise.all([
+        supabase
+        .from('bookings')
+        .select(`*, fleet ( make, model, year, base_rate, daily_rate_omr ), tenants ( name, whatsapp_number )`)
+        .order('created_at', { ascending: false })
+        .returns<BookingWithDetails[]>(), 
+        supabase
+        .from('tenants')
+        .select('*')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+    ])
+    
+    allBookings = bookingsResult.data || []
+    pendingTenants = pendingTenantsResult.data || []
+
+  } catch (error) {
+      console.error("Dashboard Data Fetch Error:", error)
+      // Optional: You could redirect to an error page here if you wanted
+  }
 
   // Filter for active operational bookings
   const activeBookings = allBookings.filter(b => ['pending', 'paid', 'confirmed'].includes(b.status || ''))
@@ -156,7 +163,6 @@ export default async function AdminDashboard() {
                         <span className="flex items-center gap-2"><Phone className="w-3.5 h-3.5"/> {tenant.whatsapp_number}</span>
                       </div>
                     </div>
-                    {/* 👇 FIX: Wrapped action in an async function to fix Type Error */}
                     <form 
                       action={async (formData) => {
                         'use server'
@@ -253,7 +259,8 @@ export default async function AdminDashboard() {
                                     <AdminStatusSelect id={booking.id} currentStatus={booking.status || 'pending'} />
                                 </td>
                                 <td className="p-5 text-center">
-                                    {booking.status === 'confirmed' || booking.status === 'paid' ? (
+                                    {/* 👇 FIX: Check for vendorPhone before showing button */}
+                                    {(booking.status === 'confirmed' || booking.status === 'paid') && vendorPhone ? (
                                         <a 
                                             href={waLink} 
                                             target="_blank" 
@@ -263,7 +270,9 @@ export default async function AdminDashboard() {
                                             <MessageCircle className="w-4 h-4" /> Dispatch Job
                                         </a>
                                     ) : (
-                                        <span className="text-xs text-gray-400 italic">Verify first</span>
+                                        <span className="text-xs text-gray-400 italic">
+                                            {vendorPhone ? 'Verify first' : 'Missing Phone'}
+                                        </span>
                                     )}
                                 </td>
                             </tr>

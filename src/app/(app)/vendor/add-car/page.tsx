@@ -7,6 +7,7 @@ import { Car, Tractor, Loader2, Upload, ChevronLeft, X, CheckCircle, Plus } from
 import Link from 'next/link'
 import Image from 'next/image'
 import { toast } from 'sonner'
+import { createVehicle } from '@/app/(app)/vendor/dashboard/actions'
 
 export default function AddAssetPage() {
   const router = useRouter()
@@ -14,7 +15,7 @@ export default function AddAssetPage() {
   
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
-  const [success, setSuccess] = useState(false) // 👈 NEW: Success State
+  const [success, setSuccess] = useState(false)
   const [category, setCategory] = useState<'car' | 'heavy'>('car')
   
   // State for Images & Description
@@ -30,6 +31,24 @@ export default function AddAssetPage() {
         return
     }
 
+    // 1. Validation: Max Size 5MB
+    const MAX_SIZE = 5 * 1024 * 1024 
+    for (const file of Array.from(e.target.files)) {
+      if (file.size > MAX_SIZE) {
+        toast.error(`"${file.name}" is too large. Max 5MB per image.`)
+        return
+      }
+    }
+
+    // 2. Fetch Tenant ID for Isolation
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+        toast.error('You must be logged in')
+        return
+    }
+    const { data: profile } = await supabase.from('profiles').select('tenant_id').eq('id', user.id).single()
+    const tenantId = profile?.tenant_id || 'unknown'
+
     try {
       setIsUploading(true)
       const newUrls: string[] = []
@@ -37,7 +56,7 @@ export default function AddAssetPage() {
       for (let i = 0; i < e.target.files.length; i++) {
           const file = e.target.files[i]
           const fileExt = file.name.split('.').pop()
-          const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
+          const fileName = `${tenantId}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
           
           const { error: uploadError } = await supabase.storage
             .from('fleet-images') 
@@ -60,68 +79,58 @@ export default function AddAssetPage() {
     }
   }
 
-  const removeImage = (indexToRemove: number) => {
-      setImages(images.filter((_, i) => i !== indexToRemove))
+  // --- 2. HANDLE IMAGE REMOVAL (Fix: Deletes from Storage) ---
+  const removeImage = async (indexToRemove: number) => {
+    const urlToRemove = images[indexToRemove]
+    
+    // Optimistic UI update (remove immediately from view)
+    setImages(prev => prev.filter((_, i) => i !== indexToRemove))
+
+    try {
+      // Extract the path relative to the bucket (e.g., "tenant_id/image.jpg")
+      const filePath = urlToRemove.split('/fleet-images/')[1]?.split('?')[0]
+      
+      if (filePath) {
+        await supabase.storage.from('fleet-images').remove([filePath])
+      }
+    } catch (err) {
+      console.error('Failed to delete image from storage:', err)
+      // We don't restore the image in UI because an orphaned file is better than a broken UI state
+    }
   }
 
-  // --- 2. HANDLE SUBMISSION ---
+  // --- 3. HANDLE SUBMISSION ---
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsSubmitting(true)
     
     const formData = new FormData(e.currentTarget)
-    const { data: { user } } = await supabase.auth.getUser()
     
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('tenant_id')
-      .eq('id', user?.id)
-      .single()
+    formData.append('category', category)
+    formData.append('description', description)
+    formData.append('image_urls', JSON.stringify(images))
 
-    if (!profile?.tenant_id) {
-      toast.error('Error: You are not a vendor.')
-      setIsSubmitting(false)
-      return
-    }
+    const result = await createVehicle(formData)
 
-    const baseData = {
-      tenant_id: profile.tenant_id,
-      category: category,
-      make: formData.get('make'),
-      model: formData.get('model'),
-      year: Number(formData.get('year')),
-      daily_rate_omr: Number(formData.get('price')),
-      is_available: true,
-      features: (formData.get('features') as string).split(',').map(s => s.trim()),
+    if (result?.error) {
+      toast.error(result.error)
       
-      // 👇 FIX: Actually saving the state data now
-      description: description,
-      images: images, 
-    }
+      // 🗑️ CLEANUP: If DB save fails, delete the uploaded images
+      if (images.length > 0) {
+          const filesToDelete = images.map(url => {
+             // Correct Path Extraction
+             return url.split('/fleet-images/')[1]?.split('?')[0]
+          }).filter(Boolean) as string[]
 
-    const specs = category === 'car' 
-      ? { 
-          transmission: formData.get('transmission'),
-        } 
-      : { 
-          tonnage: formData.get('tonnage'), 
-          usage_hours: formData.get('hours'),
-          reach: formData.get('reach')
-        } 
-
-    const { error } = await supabase.from('fleet').insert({
-      ...baseData,
-      transmission: category === 'car' ? formData.get('transmission') : null,
-      specs: specs 
-    })
-
-    if (error) {
-      toast.error(error.message)
+          if (filesToDelete.length > 0) {
+             await supabase.storage.from('fleet-images').remove(filesToDelete)
+          }
+      }
+      
       setIsSubmitting(false)
     } else {
       toast.success('Asset created successfully!')
-      setSuccess(true) // 👈 Show success screen
-      router.refresh()
+      setSuccess(true) 
     }
   }
 
@@ -227,6 +236,8 @@ export default function AddAssetPage() {
                     name="year" 
                     type="number" 
                     required 
+                    min={1990}
+                    max={new Date().getFullYear() + 1}
                     placeholder="2024" 
                     className="w-full p-3 bg-gray-50 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-black text-gray-900 font-bold placeholder:text-gray-400 placeholder:font-normal" 
                 />
@@ -234,9 +245,11 @@ export default function AddAssetPage() {
               <div>
                 <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Daily Rate (OMR)</label>
                 <input 
-                    name="price" 
+                    name="daily_rate_omr" 
                     type="number" 
                     required 
+                    min={1}
+                    step="0.01"
                     placeholder="0.00" 
                     className="w-full p-3 bg-gray-50 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-black text-gray-900 font-bold placeholder:text-gray-400 placeholder:font-normal" 
                 />
@@ -268,7 +281,7 @@ export default function AddAssetPage() {
                 </label>
                 <div className="grid grid-cols-2 gap-4">
                   <input name="tonnage" placeholder="Capacity (Tons)" className="w-full p-3 bg-white rounded-lg border border-gray-200 outline-none text-gray-900 font-bold placeholder:text-gray-400 placeholder:font-normal" />
-                  <input name="hours" placeholder="Usage Hours" className="w-full p-3 bg-white rounded-lg border border-gray-200 outline-none text-gray-900 font-bold placeholder:text-gray-400 placeholder:font-normal" />
+                  <input name="usage_hours" placeholder="Usage Hours" className="w-full p-3 bg-white rounded-lg border border-gray-200 outline-none text-gray-900 font-bold placeholder:text-gray-400 placeholder:font-normal" />
                 </div>
                 <input name="features" placeholder="Capabilities (e.g. 50m reach, Rock bucket)" className="w-full p-3 bg-white rounded-lg border border-gray-200 outline-none text-gray-900 font-bold placeholder:text-gray-400 placeholder:font-normal" />
               </div>
@@ -293,7 +306,13 @@ export default function AddAssetPage() {
             <div className="grid grid-cols-3 gap-4 mb-4">
                 {images.map((url, i) => (
                     <div key={i} className="relative aspect-[4/3] bg-gray-100 rounded-lg overflow-hidden group border border-gray-200 shadow-sm">
-                        <Image src={url} alt="preview" fill className="object-cover" />
+                        <Image 
+                            src={url} 
+                            alt="preview" 
+                            fill 
+                            sizes="150px" // Fix: Added sizes for performance
+                            className="object-cover" 
+                        />
                         <button 
                             type="button"
                             onClick={() => removeImage(i)}

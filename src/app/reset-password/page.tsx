@@ -1,43 +1,24 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
-import { Loader2, Lock, CheckCircle, Eye, EyeOff, AlertCircle } from 'lucide-react'
+import { Loader2, Lock, CheckCircle, AlertCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 export default function ResetPassword() {
   const router = useRouter()
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  
   const [loading, setLoading] = useState(false)
-  const [checking, setChecking] = useState(true) // 3. Session Check State
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState(false) // 6. Success State
-
-  // 3. PROTECT THE ROUTE: Ensure user is actually logged in
-  useEffect(() => {
-    const checkSession = async () => {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      if (!session) {
-        // If no session, the magic link didn't work or expired
-        router.push('/login?error=SessionExpired')
-      } else {
-        setChecking(false)
-      }
-    }
-    checkSession()
-  }, [router])
+  const [success, setSuccess] = useState(false)
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
 
-    // 4. Client-Side Validation
+    // 1. Client-Side Validation
     if (password.length < 6) {
         setError("Password must be at least 6 characters")
         setLoading(false)
@@ -52,7 +33,7 @@ export default function ResetPassword() {
 
     const supabase = createClient()
     
-    // Update Password
+    // 2. Update Password
     const { error } = await supabase.auth.updateUser({
       password: password
     })
@@ -62,23 +43,13 @@ export default function ResetPassword() {
       setLoading(false)
     } else {
       setSuccess(true)
-      // 6. Wait 2 seconds so they see the success message
+      // 3. Wait a moment so they see the success message, then go Home
       setTimeout(() => {
-          router.push('/') 
+          router.push('/') // ✅ Correct: They are already logged in
       }, 2000)
     }
   }
 
-  // Loading State (Checking Session)
-  if (checking) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-300" />
-      </div>
-    )
-  }
-
-  // 6. Success View
   if (success) {
       return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -114,45 +85,38 @@ export default function ResetPassword() {
             <div className="relative group">
               <Lock className="absolute left-3 top-3.5 w-4 h-4 text-gray-400 group-focus-within:text-blue-600 transition-colors" />
               <input 
-                type={showPassword ? 'text' : 'password'} // 5. Toggle Type
+                type="password" 
                 required 
-                minLength={6} // 2. Validation
+                minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Min 6 characters"
-                className="w-full pl-10 pr-10 p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-black/5 transition-all text-gray-900 font-bold placeholder:font-normal"
+                className="w-full pl-10 p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-black/5 transition-all text-gray-900 font-bold"
               />
-              <button 
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600 focus:outline-none"
-              >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
             </div>
           </div>
 
-          {/* Confirm Password (4. Added Field) */}
+          {/* Confirm Password */}
           <div>
             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Confirm Password</label>
             <div className="relative group">
               <Lock className="absolute left-3 top-3.5 w-4 h-4 text-gray-400 group-focus-within:text-blue-600 transition-colors" />
               <input 
-                type={showPassword ? 'text' : 'password'}
+                type="password" 
                 required 
                 minLength={6}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Retype password"
-                className="w-full pl-10 p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-black/5 transition-all text-gray-900 font-bold placeholder:font-normal"
+                className="w-full pl-10 p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-black/5 transition-all text-gray-900 font-bold"
               />
             </div>
           </div>
 
           <button 
-            type="submit" // 1. Added Type
+            type="submit"
             disabled={loading}
-            className="w-full py-3 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-3 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition-all flex justify-center items-center gap-2 disabled:opacity-50"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Update Password'}
           </button>

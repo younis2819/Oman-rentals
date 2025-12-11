@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { getRentalCompanies, getFleet } from '@/app/actions' 
-import { Building2, Star, ShieldCheck, Wallet, Clock, MessageCircle } from 'lucide-react' // <--- Added MessageCircle
+import { Building2, Star, ShieldCheck, Wallet, Clock, MessageCircle } from 'lucide-react'
 import MobileSearch from '@/components/MobileSearch'
 import CategoryTabs from '@/components/CategoryTabs'
 import QuickFilters from '@/components/QuickFilters'
@@ -10,8 +10,19 @@ import FeaturedFleetScroller from '@/components/FeaturedFleetScroller'
 
 export const dynamic = 'force-dynamic'
 
+// 3. Config Constant
+const SUPPORT_WHATSAPP = '96877408996'
+
 type Props = {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}
+
+// 2. Type Definition to fix @ts-ignore
+interface Company {
+  id: string
+  name: string
+  slug: string
+  logo_url: string | null
 }
 
 export default async function MarketplaceHome(props: Props) {
@@ -24,17 +35,20 @@ export default async function MarketplaceHome(props: Props) {
   const start = searchParams.start as string | undefined
   const end = searchParams.end as string | undefined
 
-  // Fetch Data
-  const [companies, fleet] = await Promise.all([
+  // 1. Safe Data Fetching (Prevent Crash)
+  const results = await Promise.allSettled([
     getRentalCompanies(),
     getFleet({ category, features, location, start, end })
   ])
+
+  // Extract data safely
+  const companies = results[0].status === 'fulfilled' ? results[0].value : []
+  const fleet = results[1].status === 'fulfilled' ? results[1].value : []
 
   // Helper: Is the user currently filtering?
   const isSearching = features || location || start
 
   return (
-    // 👇 FIX 1: Changed pb-20 to 'pb-24 md:pb-0' to fix the desktop gap line
     <div className="min-h-screen bg-gray-50 font-sans pb-24 md:pb-0 relative">
       
       {/* HERO SECTION */}
@@ -108,7 +122,7 @@ export default async function MarketplaceHome(props: Props) {
                 fleet.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {fleet.map((car) => (
-                            // @ts-ignore
+                            // @ts-ignore - CarCard props might differ slightly, safe to ignore if it renders
                             <CarCard key={car.id} car={car} />
                         ))}
                     </div>
@@ -121,11 +135,12 @@ export default async function MarketplaceHome(props: Props) {
             ) : (
                 /* B. BROWSE MODE: Infinite Scroller */
                 fleet.length > 0 ? (
-                     <div className="-mx-4 sm:-mx-6 lg:-mx-8">
-                        <FeaturedFleetScroller fleet={fleet} />
-                     </div>
+                      <div className="-mx-4 sm:-mx-6 lg:-mx-8">
+                         <FeaturedFleetScroller fleet={fleet} />
+                      </div>
                 ) : (
-                     <div className="text-center py-10 text-gray-400">Loading fleet...</div>
+                      // 4. Improved "Empty" Text
+                      <div className="text-center py-10 text-gray-400">No featured vehicles available at the moment.</div>
                 )
             )}
         </section>
@@ -138,18 +153,17 @@ export default async function MarketplaceHome(props: Props) {
                 </div>
                 {/* Horizontal scroll on mobile, grid on desktop */}
                 <div className="flex overflow-x-auto gap-4 pb-4 md:grid md:grid-cols-4 lg:grid-cols-5 md:overflow-visible no-scrollbar">
-                    {companies.map((company) => (
+                    {/* Explicitly cast to Company[] to fix map type errors */}
+                    {(companies as Company[]).map((company) => (
                     <Link key={company.id} href={`/company/${company.slug}`} className="min-w-[160px] md:min-w-0 bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-lg hover:border-blue-100 hover:-translate-y-1 transition-all flex flex-col items-center text-center gap-4 group cursor-pointer snap-center">
                         
-                        {/* 2. UPDATED LOGO LOGIC */}
                         <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-gray-400 border border-gray-200 group-hover:border-blue-200 transition-colors overflow-hidden relative shadow-sm">
-                            {/* @ts-ignore */}
                             {company.logo_url ? (
                                 <Image 
-                                  // @ts-ignore
                                   src={company.logo_url} 
-                                  alt={company.name} 
+                                  alt={`${company.name} logo`} // 5. Better Alt Text
                                   fill 
+                                  sizes="64px" // 6. Fix Layout Shift
                                   className="object-cover"
                                 />
                             ) : (
@@ -166,9 +180,9 @@ export default async function MarketplaceHome(props: Props) {
 
       </main>
 
-      {/* 👇 FIX 2 & 3: Floating WhatsApp Button */}
+      {/* Floating WhatsApp Button */}
       <a 
-        href="https://wa.me/96877408996" 
+        href={`https://wa.me/${SUPPORT_WHATSAPP}`} 
         target="_blank" 
         rel="noopener noreferrer"
         className="fixed bottom-24 right-4 md:bottom-8 md:right-8 z-50 bg-[#25D366] hover:bg-[#20ba5a] text-white p-3 md:px-6 md:py-3 rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center gap-2 group cursor-pointer"

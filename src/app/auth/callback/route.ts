@@ -2,25 +2,22 @@ import { createClient } from '@/utils/supabase/server'
 import { NextResponse } from 'next/server'
 
 export async function GET(request: Request) {
-  // The `request` object contains the URL from the email link
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
-  
-  // "next" is where they go after login (e.g., /reset-password)
   const next = requestUrl.searchParams.get('next') || '/'
 
   if (code) {
     const supabase = await createClient()
     
-    // 🔏 This exchanges the secret code for a real User Session
+    // Exchange the code for a session
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     
     if (!error) {
-      // ✅ Success! Log them in and send them to the next page
+      // ✅ Correct Syntax: Function call with parentheses
       return NextResponse.redirect(`${requestUrl.origin}${next}`)
     }
   }
 
-  // ❌ Error? Send them back to login
+  // ✅ Correct Syntax: Redirect to login with error
   return NextResponse.redirect(`${requestUrl.origin}/login?error=CouldNotVerify`)
 }

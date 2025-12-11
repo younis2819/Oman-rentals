@@ -1,10 +1,27 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
-import { Calendar, Clock, Car, AlertCircle, MapPin, CheckCircle } from 'lucide-react'
+import { Calendar, Clock, Car, AlertCircle, MapPin, CheckCircle, MessageCircle } from 'lucide-react'
 import Link from 'next/link'
+import Image from 'next/image' // 👈 2. Performance: Next.js Image
 import PayButton from '@/components/PayButton'
+import { Database } from '@/types/database.types'
 
 export const dynamic = 'force-dynamic'
+
+// 1. Strict Type Definition
+type BookingWithDetails = Database['public']['Tables']['bookings']['Row'] & {
+  fleet: {
+    make: string
+    model: string
+    year: number
+    images: string[] | null
+    daily_rate_omr: number
+  } | null
+  tenants: {
+    name: string
+    whatsapp_number: string | null
+  } | null
+}
 
 export default async function MyBookings() {
   const supabase = await createClient()
@@ -13,8 +30,8 @@ export default async function MyBookings() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // 2. Fetch User's Bookings
-  const { data: bookings } = await supabase
+  // 2. Fetch User's Bookings (Typed & Error Handled)
+  const { data: bookings, error } = await supabase
     .from('bookings')
     .select(`
       *,
@@ -32,12 +49,21 @@ export default async function MyBookings() {
     `)
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
+    .returns<BookingWithDetails[]>() // 👈 Strict Typing
+
+  if (error) {
+    console.error('Error fetching bookings:', error)
+    return (
+        <div className="p-8 text-center text-red-500">
+            Failed to load bookings. Please try refreshing.
+        </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans">
       <div className="max-w-4xl mx-auto">
         
-        {/* NOTE: Header removed. Global Navbar handles this now. */}
         <div className="mb-6">
            <h1 className="text-2xl font-black text-gray-900">My Trips</h1>
            <p className="text-sm text-gray-500">Manage your upcoming rentals</p>
@@ -64,12 +90,11 @@ export default async function MyBookings() {
           /* Booking List */
           <div className="space-y-4">
             {bookings.map((booking) => {
-              // @ts-ignore
               const car = booking.fleet
-              // @ts-ignore
               const vendor = booking.tenants
               
               const isQuoteReady = booking.status === 'quote_sent'
+              const isConfirmed = booking.status === 'confirmed' || booking.status === 'paid'
 
               const startDate = new Date(booking.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
               const endDate = new Date(booking.end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
@@ -105,7 +130,13 @@ export default async function MyBookings() {
                     {/* Car Image */}
                     <div className="w-full md:w-32 h-32 bg-gray-100 rounded-lg flex-shrink-0 overflow-hidden relative">
                       {car?.images?.[0] ? (
-                        <img src={car.images[0]} alt={car.model} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        <Image 
+                            src={car.images[0]} 
+                            alt={`${car.make} ${car.model}`}
+                            fill
+                            sizes="(max-width: 768px) 100vw, 128px" // 2. Optimization
+                            className="object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
                       ) : (
                         <Car className="w-10 h-10 text-gray-300 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                       )}
@@ -116,9 +147,26 @@ export default async function MyBookings() {
                       <div>
                         <div className="flex justify-between items-start mb-1">
                              <h3 className="font-bold text-gray-900 text-xl">{car?.make} {car?.model}</h3>
-                             <p className="font-black text-gray-900 text-lg">{booking.total_price_omr} OMR</p>
+                             {/* 6. Safer Price Display */}
+                             <p className="font-black text-gray-900 text-lg">
+                                {booking.total_price_omr ? `${booking.total_price_omr} OMR` : 'Pending'}
+                             </p>
                         </div>
-                        <p className="text-sm text-gray-500 font-medium mb-4">{vendor?.name}</p>
+                        
+                        <div className="flex items-center gap-3 mb-4">
+                            <p className="text-sm text-gray-500 font-medium">{vendor?.name}</p>
+                            {/* 4. Vendor Contact Button */}
+                            {isConfirmed && vendor?.whatsapp_number && (
+                                <a 
+                                    href={`https://wa.me/${vendor.whatsapp_number}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs font-bold text-green-600 hover:text-green-700 flex items-center gap-1 bg-green-50 px-2 py-1 rounded-md"
+                                >
+                                    <MessageCircle className="w-3 h-3" /> Contact Vendor
+                                </a>
+                            )}
+                        </div>
 
                         <div className="flex flex-wrap gap-2">
                             <div className="flex items-center gap-2 text-xs font-medium text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
@@ -141,7 +189,9 @@ export default async function MyBookings() {
                              <div className="text-xs text-gray-500">
                                 Vendor has updated the price including delivery.
                              </div>
-                             <PayButton bookingId={booking.id} amount={booking.total_price_omr} />
+                             {booking.total_price_omr && (
+                                 <PayButton bookingId={booking.id} amount={booking.total_price_omr} />
+                             )}
                           </div>
                       )}
                     </div>

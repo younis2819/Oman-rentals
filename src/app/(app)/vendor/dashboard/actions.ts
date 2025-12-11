@@ -3,7 +3,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-// --- 1. DELETE CAR (Updated for Multiple Images) ---
+// --- 1. DELETE CAR (Safe URL Parsing) ---
 export async function deleteCar(carId: string) {
   const supabase = await createClient()
 
@@ -37,19 +37,18 @@ export async function deleteCar(carId: string) {
 
   if (error) return { error: error.message }
 
-  // 3. Clean up Storage (Loop through ALL images)
+  // 3. Clean up Storage (Robust Parsing)
   if (car?.images && Array.isArray(car.images) && car.images.length > 0) {
     const filesToDelete = car.images.map((url: string) => {
-        // Extract filename (e.g. .../fleet-images/12345.jpg -> 12345.jpg)
-        return url.split('/').pop()
-    }).filter((name): name is string => !!name) // Filter out nulls
+        // Extract filename safely, ignoring query params
+        return url.split('/').pop()?.split('?')[0]
+    }).filter((name): name is string => !!name)
 
     if (filesToDelete.length > 0) {
         await supabase.storage.from('fleet-images').remove(filesToDelete)
     }
   }
 
-  // 4. Strong Cache Clear
   revalidatePath('/', 'layout') 
   return { success: true }
 }
@@ -72,7 +71,7 @@ export async function toggleCarAvailability(carId: string, currentStatus: boolea
 
   if (error) return { error: error.message }
 
-  revalidatePath('/', 'layout') // <--- Stronger refresh
+  revalidatePath('/', 'layout')
   return { success: true }
 }
 
@@ -102,6 +101,11 @@ export async function updateBookingStatus(bookingId: string, newStatus: 'confirm
 export async function sendQuote(bookingId: string, finalPrice: number) {
     const supabase = await createClient()
     
+    // Validate Price
+    if (!finalPrice || finalPrice <= 0) {
+        return { error: 'Invalid price amount' }
+    }
+    
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'Not logged in' }
   
@@ -123,19 +127,17 @@ export async function sendQuote(bookingId: string, finalPrice: number) {
     return { success: true }
 }
 
-// --- 5. CREATE VEHICLE (NEW) ---
+// --- 5. CREATE VEHICLE (Validated & Clean) ---
 export async function createVehicle(formData: FormData) {
   const supabase = await createClient()
 
-  // Auth Check
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not logged in' }
 
-  // Tenant Check
   const { data: profile } = await supabase.from('profiles').select('tenant_id').eq('id', user.id).single()
   if (!profile?.tenant_id) return { error: 'Unauthorized' }
 
-  // Extract Data
+  // Extract & Validate Data
   const category = formData.get('category')
   const make = formData.get('make')
   const model = formData.get('model')
@@ -144,44 +146,40 @@ export async function createVehicle(formData: FormData) {
   const description = formData.get('description') as string
   const transmission = formData.get('transmission')
   
-  // Handle Images (Sent as JSON string)
-  const imagesString = formData.get('images') as string 
-  // Note: In the form component we append 'images' which is an array of strings
-  // but FormData sends it weirdly if we don't stringify it.
-  // However, looking at your AddAssetPage component, you passed `images` directly in the object to supabase .insert() 
-  // BUT here we are using a Server Action. Server actions receive FormData.
-  // In the AddAssetPage component I gave you, I manually appended `images` as a JSON string to `image_urls`?
-  // Let's check the previous step. Ah, in step 3 I told you to append `image_urls`.
-  // So we grab it here:
-  
-  // If you used my previous code exactly:
-  // formData.append('images', images) -> This passes array of strings if using Supabase client directly,
-  // BUT for Server Actions, we need to be careful.
-  
-  // Let's assume the previous client component passed "images" as an array of strings.
-  // In a Server Action with FormData, arrays are tricky.
-  // SAFE WAY: In the client component, we passed the whole object to .insert() directly using client-side supabase.
-  // WAIT! Your previous component code (AddAssetPage) was using CLIENT-SIDE Supabase to insert directly.
-  // If you stick with CLIENT-SIDE insert (which your last pasted code did), you don't actually use this action.
-  
-  // HOWEVER, if you switched to the `handleSubmit` that calls `createVehicle(formData)` (my recommendation),
-  // then we need this code here.
-  
-  // Let's standardize on the Server Action approach for safety.
-  
-  // 1. Get images from form data. 
-  // In the client component `handleSubmit`, ensure you do: formData.append('image_urls', JSON.stringify(images))
+  // Validation
+  const currentYear = new Date().getFullYear()
+  if (isNaN(year) || year < 1900 || year > currentYear + 1) {
+    return { error: 'Invalid year' }
+  }
+  if (isNaN(price) || price < 0) {
+    return { error: 'Invalid price' }
+  }
+
+  // Handle Images (Safely parse JSON string from client)
   const image_urls = formData.get('image_urls') as string
-  const images = image_urls ? JSON.parse(image_urls) : []
+  let images: string[] = []
+  try {
+      images = image_urls ? JSON.parse(image_urls) : []
+  } catch (e) {
+      console.error("Image parse error", e)
+      images = []
+  }
   
-  // Specs Logic
+  // Specs Logic (Cleaned up duplication)
+  // We only put 'extra' specs here. 'transmission' goes to its own column.
   const specs = category === 'car' 
-      ? { transmission: transmission } 
+      ? {} // No extra specs for cars, transmission is in column
       : { 
           tonnage: formData.get('tonnage'), 
           usage_hours: formData.get('usage_hours'),
           reach: formData.get('reach')
         }
+
+  // Features Parsing (Safe)
+  const featuresRaw = formData.get('features') as string
+  const features = featuresRaw 
+      ? featuresRaw.split(',').map(s => s.trim()).filter(Boolean) 
+      : []
 
   const { error } = await supabase.from('fleet').insert({
     tenant_id: profile.tenant_id,
@@ -191,11 +189,11 @@ export async function createVehicle(formData: FormData) {
     year,
     daily_rate_omr: price,
     description,
-    images, // Save the array
+    images, 
     specs,
     transmission: category === 'car' ? transmission : null,
     is_available: true,
-    features: (formData.get('features') as string)?.split(',').map(s => s.trim()) || []
+    features
   })
 
   if (error) return { error: error.message }

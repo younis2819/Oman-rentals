@@ -6,11 +6,22 @@ import { updateVendorLogo, updateVendorDetails } from './actions'
 import { Loader2, Upload, Image as ImageIcon, Save, Building2, Phone, MapPin } from 'lucide-react'
 import { toast } from 'sonner'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation' // For redirect
+
+// Define types for Tenant Data
+type TenantData = {
+  name: string | null
+  logo_url: string | null
+  whatsapp_number: string | null
+  address: string | null
+}
 
 export default function VendorSettings() {
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [tenantId, setTenantId] = useState<string | null>(null) // Store tenant ID for uploads
   
   // State for Form Fields
   const [currentLogo, setCurrentLogo] = useState<string | null>(null)
@@ -23,7 +34,12 @@ export default function VendorSettings() {
     const fetchData = async () => {
         const supabase = createClient()
         const { data: { user } } = await supabase.auth.getUser()
-        if(!user) return
+        
+        // Redirect if not logged in
+        if (!user) {
+            router.push('/login')
+            return
+        }
 
         const { data: profile } = await supabase
           .from('profiles')
@@ -31,10 +47,13 @@ export default function VendorSettings() {
           .eq('id', user.id)
           .single()
 
-        // 👇 FIX: Handle if 'tenants' comes back as an array
+        if (profile?.tenant_id) {
+            setTenantId(profile.tenant_id)
+        }
+
+        // Properly handle the tenant data type
         const rawTenant = profile?.tenants
-        // @ts-ignore
-        const tenant = Array.isArray(rawTenant) ? rawTenant[0] : rawTenant
+        const tenant = Array.isArray(rawTenant) ? rawTenant[0] : rawTenant as TenantData | null
 
         if (tenant) {
             setCurrentLogo(tenant.logo_url)
@@ -45,7 +64,7 @@ export default function VendorSettings() {
         setLoading(false)
     }
     fetchData()
-  }, [])
+  }, [router])
 
   // 2. Handle Text Details Update
   const handleSaveDetails = async (e: React.FormEvent) => {
@@ -67,17 +86,36 @@ export default function VendorSettings() {
     }
   }
 
-  // 3. Handle Logo Upload (Existing Logic)
+  // 3. Handle Logo Upload (Optimized)
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+
+    // Validation: Size (2MB) & Type
+    const MAX_SIZE = 2 * 1024 * 1024
+    if (file.size > MAX_SIZE) {
+        toast.error('Logo must be under 2MB')
+        return
+    }
+    
+    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+    if (!ALLOWED_TYPES.includes(file.type)) {
+        toast.error('Only JPG, PNG, or WebP images are allowed')
+        return
+    }
+
+    if (!tenantId) {
+        toast.error('Session error. Please refresh.')
+        return
+    }
 
     try {
       setUploading(true)
       const supabase = createClient()
       
       const fileExt = file.name.split('.').pop()
-      const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`
+      // Use Tenant ID for folder organization
+      const fileName = `${tenantId}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
       
       const { error: uploadError } = await supabase.storage
         .from('logos')
@@ -89,7 +127,8 @@ export default function VendorSettings() {
         .from('logos')
         .getPublicUrl(fileName)
 
-      const result = await updateVendorLogo(urlData.publicUrl)
+      // Update DB and cleanup old logo
+      const result = await updateVendorLogo(urlData.publicUrl, currentLogo || undefined)
       if (result.error) throw new Error(result.error)
 
       setCurrentLogo(urlData.publicUrl)
@@ -129,7 +168,13 @@ export default function VendorSettings() {
              <div className="flex items-start gap-8">
                 <div className="relative w-24 h-24 bg-gray-100 rounded-2xl border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden shrink-0">
                    {currentLogo ? (
-                      <Image src={currentLogo} alt="Logo" fill className="object-cover" />
+                      <Image 
+                        src={currentLogo} 
+                        alt="Logo" 
+                        fill 
+                        sizes="96px" 
+                        className="object-cover" 
+                      />
                    ) : (
                       <ImageIcon className="w-8 h-8 text-gray-300" />
                    )}
@@ -143,21 +188,21 @@ export default function VendorSettings() {
                 <div className="flex-1">
                    <label className="block">
                       <div className="relative group cursor-pointer w-fit">
-                         <div className="flex items-center gap-2 bg-white border border-gray-300 px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-50 transition-colors">
+                         <div className={`flex items-center gap-2 bg-white border border-gray-300 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}>
                             <Upload className="w-4 h-4" /> 
                             {uploading ? 'Uploading...' : 'Change Logo'}
                          </div>
                          <input 
                            type="file" 
                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
-                           accept="image/*"
+                           accept="image/png, image/jpeg, image/webp"
                            onChange={handleFileChange}
                            disabled={uploading}
                          />
                       </div>
                    </label>
                    <p className="text-xs text-gray-400 mt-2 leading-relaxed">
-                      Recommended: Square JPG or PNG (400x400px).
+                      Recommended: Square JPG or PNG (400x400px), max 2MB.
                    </p>
                 </div>
              </div>
@@ -179,6 +224,7 @@ export default function VendorSettings() {
                   className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-900 focus:ring-2 focus:ring-black/5 outline-none transition-all"
                   placeholder="e.g. Budget Muscat"
                   required
+                  minLength={2}
                 />
              </div>
 
@@ -189,7 +235,7 @@ export default function VendorSettings() {
                         <Phone className="w-3 h-3" /> WhatsApp Number
                     </label>
                     <input 
-                      type="text" 
+                      type="tel" 
                       value={whatsapp} 
                       onChange={e => setWhatsapp(e.target.value)}
                       className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-medium text-gray-900 focus:ring-2 focus:ring-black/5 outline-none transition-all"
@@ -215,8 +261,8 @@ export default function VendorSettings() {
              <div className="pt-4 border-t border-gray-100 flex justify-end">
                 <button 
                   type="submit" 
-                  disabled={saving}
-                  className="bg-black text-white px-6 py-3 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-gray-800 transition-all shadow-lg active:scale-95"
+                  disabled={saving || uploading} // Disable while saving OR uploading logo
+                  className={`bg-black text-white px-6 py-3 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-gray-800 transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                    Save Changes

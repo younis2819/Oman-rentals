@@ -1,21 +1,32 @@
 import { notFound } from 'next/navigation'
 import { getCompanyBySlug, getCompanyFleet } from '@/app/actions' 
-import { Building2, Car, ShieldCheck, MapPin, ArrowLeft, Tractor, Settings } from 'lucide-react'
+import { Building2, Car as CarIcon, ShieldCheck, MapPin, ArrowLeft, Tractor, Settings } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image' 
 import CarCard from '@/components/CarCard' 
 import { createClient } from '@/utils/supabase/server' 
+import { Car } from '@/types' // 👈 1. Import Type
 
 // Next.js 15: Params must be awaited
 type Props = {
   params: Promise<{ slug: string }>
 }
 
+// 6. Enhanced Metadata for SEO & Sharing
 export async function generateMetadata(props: Props) {
   const params = await props.params
   const company = await getCompanyBySlug(params.slug)
+  
+  if (!company) return { title: 'Company Not Found' }
+
   return {
-    title: company ? `${company.name} - Oman Rentals` : 'Company Not Found',
+    title: `${company.name} - Oman Rentals`,
+    description: company.description || `Rent verified vehicles directly from ${company.name} in ${company.address || 'Oman'}.`,
+    openGraph: {
+      title: `${company.name} - Trusted Partner`,
+      description: `Browse ${company.name}'s fleet of rental vehicles.`,
+      images: company.logo_url ? [company.logo_url] : [],
+    }
   }
 }
 
@@ -46,15 +57,14 @@ export default async function CompanyPage(props: Props) {
 
   const fleet = await getCompanyFleet(company.id)
   
-  // 3. SPLIT THE FLEET (Cars vs Heavy)
-  const cars = fleet.filter((item: any) => item.category === 'car' || !item.category)
-  const heavy = fleet.filter((item: any) => item.category === 'heavy')
+  // 3. SPLIT THE FLEET (Strict Typing)
+  // 8. Explicit Logic: Default is car, specific check for heavy
+  const cars = fleet.filter((item: Car) => item.category !== 'heavy')
+  const heavy = fleet.filter((item: Car) => item.category === 'heavy')
   
   return (
     <div className="min-h-screen bg-gray-50 pb-20 font-sans">
       
-      {/* 🔴 HEADER REMOVED (Handled globally) */}
-
       {/* --- 1. COMPANY HERO SECTION --- */}
       <div className="bg-white border-b border-gray-200 relative">
         
@@ -62,7 +72,7 @@ export default async function CompanyPage(props: Props) {
           
           {/* Back Button */}
           <Link href="/" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-black mb-8 transition-colors">
-             <ArrowLeft className="w-4 h-4" /> Back to Marketplace
+              <ArrowLeft className="w-4 h-4" /> Back to Marketplace
           </Link>
 
           <div className="flex flex-col md:flex-row items-center md:items-start gap-6 text-center md:text-left">
@@ -72,8 +82,9 @@ export default async function CompanyPage(props: Props) {
               {company.logo_url ? (
                  <Image 
                    src={company.logo_url} 
-                   alt={company.name} 
+                   alt={`${company.name} logo`} // 5. Better Alt Text
                    fill 
+                   sizes="96px" // 3. Optimized Sizes
                    className="object-cover"
                  />
               ) : (
@@ -92,7 +103,7 @@ export default async function CompanyPage(props: Props) {
                   <ShieldCheck className="w-3 h-3" /> Verified Partner
                 </span>
 
-                {/* ✨ OPTION 1: INLINE EDIT BUTTON */}
+                {/* INLINE EDIT BUTTON */}
                 {isOwner && (
                     <Link 
                       href="/vendor/settings" 
@@ -109,14 +120,15 @@ export default async function CompanyPage(props: Props) {
                   {company.address || 'Muscat, Oman'}
                 </div>
                 <div className="flex items-center gap-1">
-                  <Car className="w-4 h-4 text-gray-400" />
+                  <CarIcon className="w-4 h-4 text-gray-400" />
                   {fleet.length} assets listed
                 </div>
               </div>
 
-               <p className="text-gray-600 max-w-2xl leading-relaxed mx-auto md:mx-0">
-                   Rent directly from {company.name}. We offer a wide range of verified vehicles maintained to the highest standards.
-               </p>
+                {/* 7. Dynamic Description fallback */}
+                <p className="text-gray-600 max-w-2xl leading-relaxed mx-auto md:mx-0">
+                    {company.description || `Rent directly from ${company.name}. We offer a wide range of verified vehicles maintained to the highest standards.`}
+                </p>
             </div>
           </div>
         </div>
@@ -129,14 +141,13 @@ export default async function CompanyPage(props: Props) {
         {cars.length > 0 && (
           <section>
             <div className="flex items-center gap-2 mb-6 border-b border-gray-100 pb-2">
-               <Car className="w-5 h-5 text-blue-600" />
+               <CarIcon className="w-5 h-5 text-blue-600" />
                <h2 className="text-lg font-bold text-gray-900">Passenger Fleet</h2>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {cars.map((car: any) => (
-                 // @ts-ignore
-                 <CarCard key={car.id} car={car} />
+              {cars.map((car: Car) => (
+                  <CarCard key={car.id} car={car} />
               ))}
             </div>
           </section>
@@ -151,9 +162,8 @@ export default async function CompanyPage(props: Props) {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {heavy.map((item: any) => (
-                 // @ts-ignore
-                 <CarCard key={item.id} car={item} />
+              {heavy.map((item: Car) => (
+                  <CarCard key={item.id} car={item} />
               ))}
             </div>
           </section>
@@ -162,7 +172,7 @@ export default async function CompanyPage(props: Props) {
         {/* Empty State */}
         {fleet.length === 0 && (
           <div className="py-20 text-center bg-white rounded-2xl border border-dashed border-gray-200">
-            <Car className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+            <CarIcon className="w-10 h-10 text-gray-300 mx-auto mb-2" />
             <p className="text-gray-500">This partner has no active listings.</p>
           </div>
         )}
