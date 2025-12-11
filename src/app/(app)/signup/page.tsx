@@ -2,13 +2,17 @@
 
 import { useState } from 'react'
 import { signup } from './actions'
-import { Loader2, AlertCircle, CheckCircle } from 'lucide-react'
+import { Loader2, AlertCircle, CheckCircle, Mail } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 export default function SignupPage() {
+  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState(false)
+  
+  // 👇 NEW: Specific state for "Check Email" screen
+  const [showVerify, setShowVerify] = useState(false)
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -18,34 +22,45 @@ export default function SignupPage() {
     const formData = new FormData(event.currentTarget)
     const result = await signup(formData)
     
+    setLoading(false)
+
     if (result?.error) {
       setError(result.error)
-      setLoading(false)
-    } else {
-      setSuccess(true)
-      setLoading(false)
+    } else if (result?.verify) {
+      // 🛑 STOP: Show "Check Email" screen
+      setShowVerify(true)
+    } else if (result?.success) {
+      // 🚀 GO: Auto-redirect if no verification needed
+      if (result.role === 'owner') router.push('/list-your-car')
+      else router.push('/')
     }
   }
 
-  if (success) {
+  // 👇 1. THE "CHECK YOUR EMAIL" SCREEN
+  if (showVerify) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 max-w-md text-center animate-in zoom-in">
-          <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-8 h-8" />
+          <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Mail className="w-8 h-8" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Account Created!</h2>
-          <p className="text-gray-500 mb-6">
-            You are now registered. Redirecting...
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Check your Email</h2>
+          <p className="text-gray-500 mb-6 leading-relaxed">
+            We sent a verification link to your inbox.<br/>
+            Please click it to activate your account.
           </p>
-          <Link href="/login" className="text-blue-600 font-bold hover:underline">
-            Go to Login
+          <div className="bg-gray-50 p-4 rounded-xl text-xs text-gray-400 mb-6">
+             Can't find it? Check your Spam folder.
+          </div>
+          <Link href="/login" className="block w-full py-3 rounded-xl bg-black text-white font-bold hover:bg-gray-800 transition-all">
+            Return to Login
           </Link>
         </div>
       </div>
     )
   }
 
+  // 👇 2. THE FORM (Standard)
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4 font-sans">
       <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
@@ -64,7 +79,6 @@ export default function SignupPage() {
             <input name="fullName" required className="w-full p-3 bg-gray-50 rounded-lg border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="John Doe" />
           </div>
 
-          {/* NEW PHONE INPUT */}
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1">Phone Number</label>
             <input name="phone" type="tel" required className="w-full p-3 bg-gray-50 rounded-lg border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="968 9000 0000" />
@@ -80,7 +94,6 @@ export default function SignupPage() {
             <input name="password" type="password" required className="w-full p-3 bg-gray-50 rounded-lg border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="••••••••" />
           </div>
 
-          {/* Role Selection */}
           <div className="pt-2">
              <label className="block text-sm font-bold text-gray-700 mb-2">I am a:</label>
              <div className="flex gap-4">
