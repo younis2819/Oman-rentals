@@ -2,64 +2,42 @@
 
 import { useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
-import { ArrowLeft, CheckCircle, Loader2, Mail } from 'lucide-react'
-import Link from 'next/link'
+import { Loader2, Lock } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
-export default function ForgotPassword() {
-  const [email, setEmail] = useState('')
+export default function ResetPassword() {
+  const router = useRouter()
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
 
-  const handleReset = async (e: React.FormEvent) => {
+  const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
 
     const supabase = createClient()
     
-    // 📧 This sends the email to the user
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${location.origin}/auth/callback?next=/reset-password`,
+    // Updates the password for the CURRENTLY logged in user
+    // (The magic link from email already logged you in)
+    const { error } = await supabase.auth.updateUser({
+      password: password
     })
 
     if (error) {
       setError(error.message)
       setLoading(false)
     } else {
-      setSuccess(true)
-      setLoading(false)
+      // Success! Send them to home
+      router.push('/')
     }
-  }
-
-  if (success) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-sm text-center">
-          <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-8 h-8" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Check your email</h2>
-          <p className="text-gray-500 mb-6">
-            We sent a password reset link to <strong>{email}</strong>
-          </p>
-          <Link href="/login" className="text-blue-600 font-bold hover:underline">
-            Back to Login
-          </Link>
-        </div>
-      </div>
-    )
   }
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 font-sans">
       <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-        <Link href="/login" className="flex items-center gap-2 text-sm text-gray-500 hover:text-black mb-6 transition-colors">
-          <ArrowLeft className="w-4 h-4" /> Back to Login
-        </Link>
-
-        <h1 className="text-2xl font-extrabold text-gray-900 mb-2">Forgot Password?</h1>
-        <p className="text-gray-500 mb-6 text-sm">Enter your email and we'll send you a reset link.</p>
+        <h1 className="text-2xl font-extrabold text-gray-900 mb-2">Set New Password</h1>
+        <p className="text-gray-500 mb-6 text-sm">Please enter your new secure password.</p>
 
         {error && (
           <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-4 border border-red-100">
@@ -67,18 +45,18 @@ export default function ForgotPassword() {
           </div>
         )}
 
-        <form onSubmit={handleReset} className="space-y-4">
+        <form onSubmit={handleUpdate} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Email Address</label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">New Password</label>
+            <div className="relative group">
+              <Lock className="absolute left-3 top-3.5 w-4 h-4 text-gray-400 group-focus-within:text-blue-600 transition-colors" />
               <input 
-                type="email" 
+                type="password" 
                 required 
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
-                className="w-full pl-10 p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-black/5 transition-all"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Min 6 characters"
+                className="w-full pl-10 p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-black/5 transition-all text-gray-900 font-bold"
               />
             </div>
           </div>
@@ -87,7 +65,7 @@ export default function ForgotPassword() {
             disabled={loading}
             className="w-full py-3 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition-all flex justify-center items-center gap-2"
           >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Send Reset Link'}
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Update Password'}
           </button>
         </form>
       </div>
