@@ -1,13 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { applyVendor } from './actions'
-import { Loader2, CheckCircle, Building2, MapPin, FileText, Phone, Mail } from 'lucide-react'
+// 👇 FIX 1: Import the correct function name
+import { createCompany } from './actions'
+import { Loader2, CheckCircle, Building2, MapPin, FileText, Phone, Mail, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 export default function ListYourCarPage() {
+  const router = useRouter()
   const [loading, setLoading] = useState(false)
-  const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -16,34 +18,17 @@ export default function ListYourCarPage() {
     setError('')
 
     const formData = new FormData(e.currentTarget)
-    const result = await applyVendor(formData)
+    
+    // 👇 FIX 2: Call the correct function
+    const result = await createCompany(formData)
 
-    if (result.error) {
+    if (result?.error) {
       setError(result.error)
       setLoading(false)
     } else {
-      setSuccess(true)
-      setLoading(false)
+      // Success! Redirect to dashboard
+      router.push('/vendor/dashboard')
     }
-  }
-
-  if (success) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 max-w-md text-center animate-in zoom-in">
-          <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-8 h-8" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Application Received!</h2>
-          <p className="text-gray-500 mb-6">
-            Thank you for applying. We will review your <strong>Commercial Registration (CR)</strong> details and contact you via WhatsApp shortly to activate your account.
-          </p>
-          <Link href="/" className="text-blue-600 font-bold hover:underline">
-            Back to Home
-          </Link>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -80,10 +65,12 @@ export default function ListYourCarPage() {
                 name="companyName" 
                 placeholder="e.g. Salalah Tours" 
                 required 
+                minLength={3}
                 className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all"
               />
             </div>
 
+            {/* Note: CR Number is not currently saved in actions.ts, but kept for UI completeness if you add it later */}
             <div>
               <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
                 <FileText className="w-4 h-4 text-gray-400" /> CR Number
@@ -91,7 +78,6 @@ export default function ListYourCarPage() {
               <input 
                 name="crNumber" 
                 placeholder="e.g. 1234567" 
-                required 
                 className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all"
               />
             </div>
@@ -102,8 +88,9 @@ export default function ListYourCarPage() {
               <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
                 <Phone className="w-4 h-4 text-gray-400" /> WhatsApp Number
               </label>
+              {/* 👇 FIX 3: Changed name="phone" to "whatsapp" to match actions.ts */}
               <input 
-                name="phone" 
+                name="whatsapp" 
                 type="tel"
                 placeholder="968 9999 9999" 
                 required 
