@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { login } from '@/app/(app)/login/actions'
 import { Loader2, AlertCircle, ArrowRight, Lock, Mail } from 'lucide-react'
+import Link from 'next/link'
 
 export default function LoginForm() {
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -22,7 +23,7 @@ export default function LoginForm() {
   }
 
   return (
-    <form action={handleSubmit} className="space-y-4">
+    <form action={handleSubmit} className="space-y-5">
       
       {/* Email Input */}
       <div>
@@ -33,15 +34,26 @@ export default function LoginForm() {
               name="email" 
               type="email" 
               required 
-              placeholder="partner@company.com"
-              className="w-full pl-10 pr-4 py-3 bg-gray-50 rounded-xl border border-gray-100 outline-none focus:ring-2 focus:ring-black/5 focus:border-black/10 text-sm font-medium transition-all" 
+              placeholder="you@example.com"
+              // 👇 Added 'text-gray-900' for dark typing color
+              className="w-full pl-10 pr-4 py-3 bg-gray-50 rounded-xl border border-gray-100 outline-none focus:ring-2 focus:ring-black/5 focus:border-black/10 text-sm font-bold text-gray-900 placeholder:text-gray-400 transition-all" 
             />
         </div>
       </div>
 
       {/* Password Input */}
       <div>
-        <label className="text-xs font-bold text-gray-500 uppercase mb-1 block ml-1">Password</label>
+        {/* 👇 Flex container for Label + Forgot Password Link */}
+        <div className="flex items-center justify-between mb-1 ml-1">
+            <label className="text-xs font-bold text-gray-500 uppercase">Password</label>
+            <Link 
+              href="/forgot-password" 
+              className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+            >
+              Forgot Password?
+            </Link>
+        </div>
+
         <div className="relative group">
             <Lock className="absolute left-3 top-3.5 w-4 h-4 text-gray-400 group-focus-within:text-blue-600 transition-colors" />
             <input 
@@ -49,7 +61,8 @@ export default function LoginForm() {
               type="password" 
               required 
               placeholder="••••••••"
-              className="w-full pl-10 pr-4 py-3 bg-gray-50 rounded-xl border border-gray-100 outline-none focus:ring-2 focus:ring-black/5 focus:border-black/10 text-sm font-medium transition-all" 
+              // 👇 Added 'text-gray-900' here too
+              className="w-full pl-10 pr-4 py-3 bg-gray-50 rounded-xl border border-gray-100 outline-none focus:ring-2 focus:ring-black/5 focus:border-black/10 text-sm font-bold text-gray-900 placeholder:text-gray-400 transition-all" 
             />
         </div>
       </div>
@@ -73,7 +86,7 @@ export default function LoginForm() {
             </>
         ) : (
             <>
-                Login to Dashboard <ArrowRight className="w-4 h-4" />
+                Sign In <ArrowRight className="w-4 h-4" />
             </>
         )}
       </button>

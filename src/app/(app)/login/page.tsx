@@ -26,11 +26,11 @@ export default function LoginPage() {
           </div>
           <h1 className="text-2xl font-black text-gray-900 tracking-tight">Welcome Back</h1>
           <p className="text-gray-500 text-sm mt-2 font-medium">
-            Enter your details to manage your fleet.
+            Sign in to access your account.
           </p>
         </div>
 
-        {/* The Form */}
+        {/* The Form (Inputs are inside here) */}
         <LoginForm />
 
         {/* Register Link */}
@@ -42,7 +42,7 @@ export default function LoginPage() {
             href="/signup" 
             className="block w-full py-3 rounded-xl border border-gray-200 text-gray-600 font-bold text-sm hover:border-black hover:text-black hover:bg-gray-50 transition-all"
           >
-            Apply as a Partner
+            Create an Account
           </Link>
         </div>
 
