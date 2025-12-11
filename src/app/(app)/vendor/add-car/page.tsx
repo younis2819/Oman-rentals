@@ -3,10 +3,10 @@
 import { useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
-import { Car, Tractor, Loader2, Upload, ChevronLeft, X } from 'lucide-react'
+import { Car, Tractor, Loader2, Upload, ChevronLeft, X, CheckCircle, Plus } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { toast } from 'sonner' // <--- 1. Beautiful Alerts
+import { toast } from 'sonner'
 
 export default function AddAssetPage() {
   const router = useRouter()
@@ -14,9 +14,10 @@ export default function AddAssetPage() {
   
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  const [success, setSuccess] = useState(false) // 👈 NEW: Success State
   const [category, setCategory] = useState<'car' | 'heavy'>('car')
   
-  // New State for Multi-Image & Description
+  // State for Images & Description
   const [images, setImages] = useState<string[]>([])
   const [description, setDescription] = useState('')
 
@@ -24,7 +25,6 @@ export default function AddAssetPage() {
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return
 
-    // Limit check
     if (images.length + e.target.files.length > 5) {
         toast.error('Maximum 5 images allowed')
         return
@@ -34,19 +34,17 @@ export default function AddAssetPage() {
       setIsUploading(true)
       const newUrls: string[] = []
 
-      // Upload each file
       for (let i = 0; i < e.target.files.length; i++) {
           const file = e.target.files[i]
           const fileExt = file.name.split('.').pop()
           const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
           
           const { error: uploadError } = await supabase.storage
-            .from('fleet-images') // Your existing bucket
+            .from('fleet-images') 
             .upload(fileName, file)
 
           if (uploadError) throw uploadError
 
-          // Get Public URL
           const { data } = supabase.storage.from('fleet-images').getPublicUrl(fileName)
           newUrls.push(data.publicUrl)
       }
@@ -62,7 +60,6 @@ export default function AddAssetPage() {
     }
   }
 
-  // Remove image from list
   const removeImage = (indexToRemove: number) => {
       setImages(images.filter((_, i) => i !== indexToRemove))
   }
@@ -75,7 +72,6 @@ export default function AddAssetPage() {
     const formData = new FormData(e.currentTarget)
     const { data: { user } } = await supabase.auth.getUser()
     
-    // Get Tenant ID
     const { data: profile } = await supabase
       .from('profiles')
       .select('tenant_id')
@@ -88,7 +84,6 @@ export default function AddAssetPage() {
       return
     }
 
-    // Prepare Base Data
     const baseData = {
       tenant_id: profile.tenant_id,
       category: category,
@@ -99,12 +94,11 @@ export default function AddAssetPage() {
       is_available: true,
       features: (formData.get('features') as string).split(',').map(s => s.trim()),
       
-      // 👇 NEW FIELDS
+      // 👇 FIX: Actually saving the state data now
       description: description,
-      images: images, // Send the array of URLs
+      images: images, 
     }
 
-    // Prepare Dynamic Specs
     const specs = category === 'car' 
       ? { 
           transmission: formData.get('transmission'),
@@ -115,7 +109,6 @@ export default function AddAssetPage() {
           reach: formData.get('reach')
         } 
 
-    // Insert into Supabase
     const { error } = await supabase.from('fleet').insert({
       ...baseData,
       transmission: category === 'car' ? formData.get('transmission') : null,
@@ -127,19 +120,52 @@ export default function AddAssetPage() {
       setIsSubmitting(false)
     } else {
       toast.success('Asset created successfully!')
-      router.push('/vendor/dashboard')
+      setSuccess(true) // 👈 Show success screen
       router.refresh()
     }
   }
 
+  // 🟢 1. SUCCESS VIEW
+  if (success) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-200 max-w-md w-full text-center animate-in zoom-in duration-300">
+           <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-8 h-8" />
+           </div>
+           <h2 className="text-2xl font-black text-gray-900 mb-2">Vehicle Published!</h2>
+           <p className="text-gray-500 mb-8">Your asset has been successfully added to the fleet and is now ready for bookings.</p>
+           
+           <div className="space-y-3">
+              <Link 
+                href="/vendor/dashboard"
+                className="block w-full py-3 bg-black text-white font-bold rounded-xl hover:bg-gray-800 transition-colors"
+              >
+                Go to Dashboard
+              </Link>
+              <button 
+                onClick={() => window.location.reload()} 
+                className="block w-full py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
+              >
+                <div className="flex items-center justify-center gap-2">
+                   <Plus className="w-4 h-4" /> Add Another Vehicle
+                </div>
+              </button>
+           </div>
+        </div>
+      </div>
+    )
+  }
+
+  // 📝 2. FORM VIEW
   return (
     <div className="min-h-screen bg-gray-50 p-6 font-sans pb-20">
       <div className="max-w-xl mx-auto">
         
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
-          <Link href="/vendor/dashboard" className="p-2 bg-white rounded-full border border-gray-200 shadow-sm">
-            <ChevronLeft className="w-5 h-5" />
+          <Link href="/vendor/dashboard" className="p-2 bg-white rounded-full border border-gray-200 shadow-sm hover:bg-gray-50 transition-colors">
+            <ChevronLeft className="w-5 h-5 text-gray-900" />
           </Link>
           <h1 className="text-2xl font-black text-gray-900">Add New Asset</h1>
         </div>
@@ -150,7 +176,7 @@ export default function AddAssetPage() {
             type="button"
             onClick={() => setCategory('car')}
             className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${
-              category === 'car' ? 'border-black bg-black text-white' : 'border-gray-200 bg-white text-gray-500'
+              category === 'car' ? 'border-black bg-black text-white' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
             }`}
           >
             <Car className="w-6 h-6" />
@@ -161,7 +187,7 @@ export default function AddAssetPage() {
             type="button"
             onClick={() => setCategory('heavy')}
             className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${
-              category === 'heavy' ? 'border-black bg-black text-white' : 'border-gray-200 bg-white text-gray-500'
+              category === 'heavy' ? 'border-black bg-black text-white' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
             }`}
           >
             <Tractor className="w-6 h-6" />
@@ -176,22 +202,44 @@ export default function AddAssetPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Make</label>
-                <input name="make" required placeholder={category === 'car' ? "Toyota" : "Caterpillar"} className="w-full p-3 bg-gray-50 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-black" />
+                <input 
+                    name="make" 
+                    required 
+                    placeholder={category === 'car' ? "Toyota" : "Caterpillar"} 
+                    className="w-full p-3 bg-gray-50 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-black text-gray-900 font-bold placeholder:text-gray-400 placeholder:font-normal" 
+                />
               </div>
               <div>
                 <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Model</label>
-                <input name="model" required placeholder={category === 'car' ? "Camry" : "320D Excavator"} className="w-full p-3 bg-gray-50 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-black" />
+                <input 
+                    name="model" 
+                    required 
+                    placeholder={category === 'car' ? "Camry" : "320D Excavator"} 
+                    className="w-full p-3 bg-gray-50 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-black text-gray-900 font-bold placeholder:text-gray-400 placeholder:font-normal" 
+                />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Year</label>
-                <input name="year" type="number" required placeholder="2024" className="w-full p-3 bg-gray-50 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-black" />
+                <input 
+                    name="year" 
+                    type="number" 
+                    required 
+                    placeholder="2024" 
+                    className="w-full p-3 bg-gray-50 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-black text-gray-900 font-bold placeholder:text-gray-400 placeholder:font-normal" 
+                />
               </div>
               <div>
                 <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Daily Rate (OMR)</label>
-                <input name="price" type="number" required placeholder="0.00" className="w-full p-3 bg-gray-50 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-black" />
+                <input 
+                    name="price" 
+                    type="number" 
+                    required 
+                    placeholder="0.00" 
+                    className="w-full p-3 bg-gray-50 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-black text-gray-900 font-bold placeholder:text-gray-400 placeholder:font-normal" 
+                />
               </div>
             </div>
           </div>
@@ -203,11 +251,15 @@ export default function AddAssetPage() {
                 <label className="text-xs font-bold text-gray-500 uppercase mb-1 block flex items-center gap-2">
                   <Car className="w-3 h-3" /> Vehicle Details
                 </label>
-                <select name="transmission" className="w-full p-3 bg-white rounded-lg border border-gray-200 outline-none">
+                <select name="transmission" className="w-full p-3 bg-white rounded-lg border border-gray-200 outline-none text-gray-900 font-bold">
                   <option value="Automatic">Automatic</option>
                   <option value="Manual">Manual</option>
                 </select>
-                <input name="features" placeholder="Features (e.g. GPS, Sunroof)" className="w-full p-3 bg-white rounded-lg border border-gray-200 outline-none" />
+                <input 
+                    name="features" 
+                    placeholder="Features (e.g. GPS, Sunroof)" 
+                    className="w-full p-3 bg-white rounded-lg border border-gray-200 outline-none text-gray-900 font-bold placeholder:text-gray-400 placeholder:font-normal" 
+                />
               </div>
             ) : (
               <div className="space-y-4">
@@ -215,33 +267,32 @@ export default function AddAssetPage() {
                   <Tractor className="w-3 h-3" /> Machine Specs
                 </label>
                 <div className="grid grid-cols-2 gap-4">
-                  <input name="tonnage" placeholder="Capacity (Tons)" className="w-full p-3 bg-white rounded-lg border border-gray-200 outline-none" />
-                  <input name="hours" placeholder="Usage Hours" className="w-full p-3 bg-white rounded-lg border border-gray-200 outline-none" />
+                  <input name="tonnage" placeholder="Capacity (Tons)" className="w-full p-3 bg-white rounded-lg border border-gray-200 outline-none text-gray-900 font-bold placeholder:text-gray-400 placeholder:font-normal" />
+                  <input name="hours" placeholder="Usage Hours" className="w-full p-3 bg-white rounded-lg border border-gray-200 outline-none text-gray-900 font-bold placeholder:text-gray-400 placeholder:font-normal" />
                 </div>
-                <input name="features" placeholder="Capabilities (e.g. 50m reach, Rock bucket)" className="w-full p-3 bg-white rounded-lg border border-gray-200 outline-none" />
+                <input name="features" placeholder="Capabilities (e.g. 50m reach, Rock bucket)" className="w-full p-3 bg-white rounded-lg border border-gray-200 outline-none text-gray-900 font-bold placeholder:text-gray-400 placeholder:font-normal" />
               </div>
             )}
           </div>
 
-          {/* 👇 NEW: DESCRIPTION FIELD */}
+          {/* DESCRIPTION */}
           <div>
             <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Description</label>
             <textarea 
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full p-3 bg-gray-50 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-black min-h-[100px]"
+                className="w-full p-3 bg-gray-50 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-black min-h-[100px] text-gray-900 font-medium placeholder:text-gray-400"
                 placeholder="Describe the condition, rules, or extra details..."
             />
           </div>
 
-          {/* 👇 NEW: MULTI-IMAGE UPLOAD */}
+          {/* MULTI-IMAGE UPLOAD */}
           <div>
             <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Photos (Max 5)</label>
             
             <div className="grid grid-cols-3 gap-4 mb-4">
-                {/* 1. Previews */}
                 {images.map((url, i) => (
-                    <div key={i} className="relative aspect-[4/3] bg-gray-100 rounded-lg overflow-hidden group border border-gray-200">
+                    <div key={i} className="relative aspect-[4/3] bg-gray-100 rounded-lg overflow-hidden group border border-gray-200 shadow-sm">
                         <Image src={url} alt="preview" fill className="object-cover" />
                         <button 
                             type="button"
@@ -253,9 +304,8 @@ export default function AddAssetPage() {
                     </div>
                 ))}
 
-                {/* 2. Upload Button */}
                 {images.length < 5 && (
-                    <label className="aspect-[4/3] border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-gray-100 transition-colors">
+                    <label className="aspect-[4/3] border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-gray-100 transition-colors bg-gray-50">
                         {isUploading ? <Loader2 className="w-6 h-6 animate-spin text-gray-400"/> : <Upload className="w-6 h-6 text-gray-400" />}
                         <span className="text-xs text-gray-400 font-bold mt-2">Add Photo</span>
                         <input 
@@ -269,12 +319,12 @@ export default function AddAssetPage() {
                     </label>
                 )}
             </div>
-            <p className="text-xs text-gray-400">First image will be the cover photo.</p>
+            <p className="text-[10px] text-gray-400">First image will be the cover photo.</p>
           </div>
 
           <button 
             type="submit" 
-            disabled={isSubmitting || isUploading}
+            disabled={isSubmitting || isUploading || images.length === 0}
             className="w-full bg-black text-white font-bold py-4 rounded-xl flex justify-center items-center gap-2 hover:bg-gray-900 transition-all disabled:opacity-50 shadow-lg active:scale-95"
           >
             {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'List Asset'}

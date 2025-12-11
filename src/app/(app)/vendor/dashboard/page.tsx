@@ -30,6 +30,7 @@ export default async function VendorDashboard() {
     .select(`*, fleet(make, model, images, category)`)
     .eq('tenant_id', tenantId)
     .order('created_at', { ascending: false })
+    .limit(50) 
 
   // 3. Compute Metrics
   const safeBookings = bookings || []
@@ -43,13 +44,9 @@ export default async function VendorDashboard() {
   return (
     <div className="min-h-screen bg-[#F9FAFB] font-sans pb-20">
       
-      {/* NOTE: We removed the <nav> block here because 
-         src/components/Navbar.tsx is now handling the top bar globally.
-      */}
-
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
-        {/* --- PAGE HEADER (Title + Add Button) --- */}
+        {/* --- PAGE HEADER --- */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-black text-gray-900">Dashboard</h1>
@@ -98,14 +95,15 @@ export default async function VendorDashboard() {
                Recent Bookings
              </h2>
              
-             {/* Search (Visual Only) */}
+             {/* Search */}
              <div className="flex items-center gap-2">
                 <div className="relative">
                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
                    <input 
                      type="text" 
                      placeholder="Search ref or name..." 
-                     className="pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-black/5 transition-all w-full sm:w-64"
+                     // 👇 FIX: Added 'text-gray-900 font-bold'
+                     className="pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-black/5 transition-all w-full sm:w-64 text-gray-900 font-bold placeholder:font-normal placeholder:text-gray-400"
                    />
                 </div>
                 <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-500">
@@ -114,7 +112,7 @@ export default async function VendorDashboard() {
              </div>
           </div>
 
-          {/* Table Header (Desktop) */}
+          {/* Table Header */}
           <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50/50 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
              <div className="col-span-4">Asset / Customer</div>
              <div className="col-span-3">Dates</div>
@@ -135,9 +133,8 @@ export default async function VendorDashboard() {
             )}
           </div>
           
-          {/* Footer */}
           <div className="p-4 border-t border-gray-100 bg-gray-50/30 text-xs text-gray-500 text-center">
-             Showing latest {safeBookings.length} bookings
+              Showing latest {safeBookings.length} bookings
           </div>
         </div>
 
