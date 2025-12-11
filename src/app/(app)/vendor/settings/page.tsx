@@ -6,7 +6,7 @@ import { updateVendorLogo, updateVendorDetails } from './actions'
 import { Loader2, Upload, Image as ImageIcon, Save, Building2, Phone, MapPin } from 'lucide-react'
 import { toast } from 'sonner'
 import Image from 'next/image'
-import { useRouter } from 'next/navigation' // For redirect
+import { useRouter } from 'next/navigation'
 
 // Define types for Tenant Data
 type TenantData = {
@@ -21,7 +21,7 @@ export default function VendorSettings() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [tenantId, setTenantId] = useState<string | null>(null) // Store tenant ID for uploads
+  const [tenantId, setTenantId] = useState<string | null>(null)
   
   // State for Form Fields
   const [currentLogo, setCurrentLogo] = useState<string | null>(null)
@@ -35,7 +35,6 @@ export default function VendorSettings() {
         const supabase = createClient()
         const { data: { user } } = await supabase.auth.getUser()
         
-        // Redirect if not logged in
         if (!user) {
             router.push('/login')
             return
@@ -53,7 +52,9 @@ export default function VendorSettings() {
 
         // Properly handle the tenant data type
         const rawTenant = profile?.tenants
-        const tenant = Array.isArray(rawTenant) ? rawTenant[0] : rawTenant as TenantData | null
+        
+        // 👇 FIX: Double cast to 'unknown' first to bypass the overlap error
+        const tenant = (Array.isArray(rawTenant) ? rawTenant[0] : rawTenant) as unknown as TenantData | null
 
         if (tenant) {
             setCurrentLogo(tenant.logo_url)
@@ -86,12 +87,11 @@ export default function VendorSettings() {
     }
   }
 
-  // 3. Handle Logo Upload (Optimized)
+  // 3. Handle Logo Upload
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // Validation: Size (2MB) & Type
     const MAX_SIZE = 2 * 1024 * 1024
     if (file.size > MAX_SIZE) {
         toast.error('Logo must be under 2MB')
@@ -114,7 +114,6 @@ export default function VendorSettings() {
       const supabase = createClient()
       
       const fileExt = file.name.split('.').pop()
-      // Use Tenant ID for folder organization
       const fileName = `${tenantId}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
       
       const { error: uploadError } = await supabase.storage
@@ -127,7 +126,6 @@ export default function VendorSettings() {
         .from('logos')
         .getPublicUrl(fileName)
 
-      // Update DB and cleanup old logo
       const result = await updateVendorLogo(urlData.publicUrl, currentLogo || undefined)
       if (result.error) throw new Error(result.error)
 
@@ -159,7 +157,7 @@ export default function VendorSettings() {
             <p className="text-gray-500">Manage your public company profile.</p>
           </div>
 
-          {/* --- CARD 1: LOGO UPLOAD --- */}
+          {/* CARD 1: LOGO UPLOAD */}
           <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
              <h2 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
                 <ImageIcon className="w-5 h-5 text-gray-400" /> Company Logo
@@ -208,7 +206,7 @@ export default function VendorSettings() {
              </div>
           </div>
 
-          {/* --- CARD 2: COMPANY DETAILS FORM --- */}
+          {/* CARD 2: COMPANY DETAILS FORM */}
           <form onSubmit={handleSaveDetails} className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm space-y-6">
              <h2 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-gray-400" /> Company Details
@@ -261,7 +259,7 @@ export default function VendorSettings() {
              <div className="pt-4 border-t border-gray-100 flex justify-end">
                 <button 
                   type="submit" 
-                  disabled={saving || uploading} // Disable while saving OR uploading logo
+                  disabled={saving || uploading} 
                   className={`bg-black text-white px-6 py-3 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-gray-800 transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
