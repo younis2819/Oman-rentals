@@ -3,18 +3,21 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { updateVendorLogo, updateVendorDetails } from './actions' 
-import { Loader2, Upload, Image as ImageIcon, Save, Building2, Phone, MapPin } from 'lucide-react'
+import { Loader2, Upload, Image as ImageIcon, Save, Building2, Phone, MapPin, Globe } from 'lucide-react'
 import { toast } from 'sonner'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 
-// Define types for Tenant Data
+// Updated type with City
 type TenantData = {
   name: string | null
   logo_url: string | null
   whatsapp_number: string | null
   address: string | null
+  city: string | null
 }
+
+const CITIES = ['Muscat', 'Salalah', 'Sohar', 'Nizwa', 'Sur', 'Buraimi']
 
 export default function VendorSettings() {
   const router = useRouter()
@@ -23,13 +26,14 @@ export default function VendorSettings() {
   const [uploading, setUploading] = useState(false)
   const [tenantId, setTenantId] = useState<string | null>(null)
   
-  // State for Form Fields
+  // State
   const [currentLogo, setCurrentLogo] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [whatsapp, setWhatsapp] = useState('')
   const [address, setAddress] = useState('')
+  const [city, setCity] = useState('Muscat') // Default
 
-  // 1. Fetch Current Data on Mount
+  // 1. Fetch Data
   useEffect(() => {
     const fetchData = async () => {
         const supabase = createClient()
@@ -42,7 +46,7 @@ export default function VendorSettings() {
 
         const { data: profile } = await supabase
           .from('profiles')
-          .select('tenant_id, tenants(name, logo_url, whatsapp_number, address)')
+          .select('tenant_id, tenants(name, logo_url, whatsapp_number, address, city)')
           .eq('id', user.id)
           .single()
 
@@ -50,10 +54,7 @@ export default function VendorSettings() {
             setTenantId(profile.tenant_id)
         }
 
-        // Properly handle the tenant data type
         const rawTenant = profile?.tenants
-        
-        // 👇 FIX: Double cast to 'unknown' first to bypass the overlap error
         const tenant = (Array.isArray(rawTenant) ? rawTenant[0] : rawTenant) as unknown as TenantData | null
 
         if (tenant) {
@@ -61,13 +62,14 @@ export default function VendorSettings() {
             setName(tenant.name || '')
             setWhatsapp(tenant.whatsapp_number || '')
             setAddress(tenant.address || '')
+            setCity(tenant.city || 'Muscat') // Load saved city
         }
         setLoading(false)
     }
     fetchData()
   }, [router])
 
-  // 2. Handle Text Details Update
+  // 2. Handle Save
   const handleSaveDetails = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
@@ -76,6 +78,7 @@ export default function VendorSettings() {
     formData.append('name', name)
     formData.append('whatsapp', whatsapp)
     formData.append('address', address)
+    formData.append('city', city) // Send City
 
     const result = await updateVendorDetails(formData)
     setSaving(false)
@@ -87,7 +90,7 @@ export default function VendorSettings() {
     }
   }
 
-  // 3. Handle Logo Upload
+  // 3. Handle Logo (Unchanged)
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -112,7 +115,6 @@ export default function VendorSettings() {
     try {
       setUploading(true)
       const supabase = createClient()
-      
       const fileExt = file.name.split('.').pop()
       const fileName = `${tenantId}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
       
@@ -157,7 +159,7 @@ export default function VendorSettings() {
             <p className="text-gray-500">Manage your public company profile.</p>
           </div>
 
-          {/* CARD 1: LOGO UPLOAD */}
+          {/* CARD 1: LOGO */}
           <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
              <h2 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
                 <ImageIcon className="w-5 h-5 text-gray-400" /> Company Logo
@@ -206,7 +208,7 @@ export default function VendorSettings() {
              </div>
           </div>
 
-          {/* CARD 2: COMPANY DETAILS FORM */}
+          {/* CARD 2: DETAILS */}
           <form onSubmit={handleSaveDetails} className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm space-y-6">
              <h2 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-gray-400" /> Company Details
@@ -227,6 +229,20 @@ export default function VendorSettings() {
              </div>
 
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* City (New) */}
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1 flex items-center gap-1">
+                        <Globe className="w-3 h-3" /> Base City
+                    </label>
+                    <select 
+                      value={city}
+                      onChange={e => setCity(e.target.value)}
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-medium text-gray-900 focus:ring-2 focus:ring-black/5 outline-none transition-all"
+                    >
+                        {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                </div>
+
                 {/* Phone */}
                 <div>
                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1 flex items-center gap-1">
@@ -240,20 +256,20 @@ export default function VendorSettings() {
                       placeholder="e.g. 96812345678"
                     />
                 </div>
+             </div>
 
-                {/* Address */}
-                <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1 flex items-center gap-1">
-                        <MapPin className="w-3 h-3" /> Office Location
-                    </label>
-                    <input 
-                      type="text" 
-                      value={address} 
-                      onChange={e => setAddress(e.target.value)}
-                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-medium text-gray-900 focus:ring-2 focus:ring-black/5 outline-none transition-all"
-                      placeholder="e.g. Al Khuwair, Muscat"
-                    />
-                </div>
+             {/* Address */}
+             <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1 flex items-center gap-1">
+                    <MapPin className="w-3 h-3" /> Detailed Address
+                </label>
+                <input 
+                  type="text" 
+                  value={address} 
+                  onChange={e => setAddress(e.target.value)}
+                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-medium text-gray-900 focus:ring-2 focus:ring-black/5 outline-none transition-all"
+                  placeholder="e.g. Building 4, Al Khuwair Street"
+                />
              </div>
 
              <div className="pt-4 border-t border-gray-100 flex justify-end">

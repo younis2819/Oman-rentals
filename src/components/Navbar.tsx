@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { Car, LayoutDashboard, User, Loader2, Building2 } from 'lucide-react'
+import { Car, LayoutDashboard, User, Loader2, Settings } from 'lucide-react' // 👈 Added Settings Icon
 import SignOutButton from './SignOutButton'
 
 export default async function Navbar() {
@@ -60,7 +60,7 @@ export default async function Navbar() {
         </Link>
 
         {/* RIGHT SIDE ACTIONS */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-4">
             
             {!user ? (
                 /* SCENARIO A: GUEST */
@@ -80,23 +80,35 @@ export default async function Navbar() {
                       href="/vendor/pending" 
                       className="flex items-center gap-2 text-sm font-bold text-yellow-700 bg-yellow-50 border border-yellow-200 px-4 py-2 rounded-full hover:bg-yellow-100 transition-all animate-pulse"
                    >
-                      <Loader2 className="w-4 h-4 animate-spin" /> Application Under Review
+                      <Loader2 className="w-4 h-4 animate-spin" /> <span className="hidden md:inline">Under Review</span>
                    </Link>
+                   
+                   {/* Vendor Settings */}
+                   <Link href="/vendor/settings" className="p-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-full transition-all" title="Company Settings">
+                      <Settings className="w-5 h-5" />
+                   </Link>
+
                    <div className="h-6 w-px bg-gray-200"></div>
                    <SignOutButton />
                 </>
             ) : isActiveVendor ? (
                 /* SCENARIO C: ACTIVE VENDOR */
                 <>
-                   <span className="hidden md:inline text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-gray-50 px-2 py-1 rounded border border-gray-100">
+                   <span className="hidden lg:inline text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-gray-50 px-2 py-1 rounded border border-gray-100">
                       Vendor Mode
                    </span>
                    <Link 
                       href="/vendor/dashboard" 
                       className="flex items-center gap-2 text-sm font-bold text-white bg-black px-4 py-2 rounded-full hover:bg-gray-800 transition-all shadow-md"
                    >
-                      <LayoutDashboard className="w-4 h-4" /> Dashboard
+                      <LayoutDashboard className="w-4 h-4" /> <span className="hidden md:inline">Dashboard</span>
                    </Link>
+
+                   {/* Vendor Settings */}
+                   <Link href="/vendor/settings" className="p-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-full transition-all" title="Company Settings">
+                      <Settings className="w-5 h-5" />
+                   </Link>
+
                    <div className="h-6 w-px bg-gray-200"></div>
                    <SignOutButton />
                 </>
@@ -110,8 +122,14 @@ export default async function Navbar() {
                       href="/my-bookings" 
                       className="flex items-center gap-2 text-sm font-bold text-gray-600 hover:text-black bg-white border border-gray-200 px-4 py-2 rounded-full hover:border-black transition-all"
                    >
-                      <User className="w-4 h-4" /> My Trips
+                      <User className="w-4 h-4" /> <span className="hidden md:inline">My Trips</span>
                    </Link>
+
+                   {/* Customer Settings */}
+                   <Link href="/settings" className="p-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-full transition-all" title="Account Settings">
+                      <Settings className="w-5 h-5" />
+                   </Link>
+
                    <div className="h-6 w-px bg-gray-200"></div>
                    <SignOutButton />
                 </>
