@@ -7,18 +7,19 @@ import CategoryTabs from '@/components/CategoryTabs'
 import QuickFilters from '@/components/QuickFilters'
 import CarCard from '@/components/CarCard'
 import FeaturedFleetScroller from '@/components/FeaturedFleetScroller'
-import { Car } from '@/types' // ✅ Fix types
+import { Car } from '@/types' 
 
 export const dynamic = 'force-dynamic'
 
 const SUPPORT_WHATSAPP = '96877408996'
 
-// Safe Company Interface
+// ✅ FIX 1: Updated Company Interface to include City
 interface Company {
   id: string
   name: string
   slug: string
   logo_url: string | null
+  city: string | null
 }
 
 type Props = {
@@ -36,7 +37,7 @@ export default async function MarketplaceHome(props: Props) {
 
   // 1. Crash-Proof Data Fetching
   const results = await Promise.allSettled([
-    getRentalCompanies(),
+    getRentalCompanies(true, location), 
     getFleet({ category, features, location, start, end })
   ])
 
@@ -136,7 +137,10 @@ export default async function MarketplaceHome(props: Props) {
         {!isSearching && (
             <section>
                 <div className="text-center mb-10">
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Trusted Rental Partners</h2>
+                    {/* ✅ FIX 2: Dynamic Location Header */}
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                      Trusted Rental Partners {location && location !== 'All Oman' ? `in ${location}` : ''}
+                    </h2>
                 </div>
                 <div className="flex overflow-x-auto gap-4 pb-4 md:grid md:grid-cols-4 lg:grid-cols-5 md:overflow-visible no-scrollbar">
                     {(companies as Company[]).map((company) => (
@@ -154,7 +158,13 @@ export default async function MarketplaceHome(props: Props) {
                                 <Building2 className="w-6 h-6" />
                             )}
                         </div>
-                        <h3 className="font-bold text-gray-900 text-sm group-hover:text-blue-700 truncate w-full">{company.name}</h3>
+                        <div className="w-full">
+                            <h3 className="font-bold text-gray-900 text-sm group-hover:text-blue-700 truncate w-full">{company.name}</h3>
+                            {/* Optional: Show city if useful context */}
+                            {company.city && (
+                                <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-wide">{company.city}</p>
+                            )}
+                        </div>
                     </Link>
                     ))}
                 </div>

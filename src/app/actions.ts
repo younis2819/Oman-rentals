@@ -13,8 +13,8 @@ type BookingWithFleet = Database['public']['Tables']['bookings']['Row'] & {
   fleet: { make: string; model: string } | null
 }
 
-// --- 1. Get Rental Companies (Curated) ---
-export async function getRentalCompanies(featuredOnly = false) {
+// --- 1. Get Rental Companies (Curated & City-Aware) ---
+export async function getRentalCompanies(featuredOnly = false, city?: string) {
   const supabase = await createClient()
   
   let query = supabase
@@ -22,6 +22,11 @@ export async function getRentalCompanies(featuredOnly = false) {
     .select('id, name, slug, whatsapp_number, logo_url, city') 
     .eq('status', 'active') 
     .not('logo_url', 'is', null)
+
+  // City Filter
+  if (city && city !== 'All Oman') {
+    query = query.eq('city', city)
+  }
 
   if (featuredOnly) {
     query = query
