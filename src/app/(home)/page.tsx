@@ -7,17 +7,13 @@ import CategoryTabs from '@/components/CategoryTabs'
 import QuickFilters from '@/components/QuickFilters'
 import CarCard from '@/components/CarCard'
 import FeaturedFleetScroller from '@/components/FeaturedFleetScroller'
+import { Car } from '@/types' // ✅ Fix types
 
 export const dynamic = 'force-dynamic'
 
-// 3. Config Constant
 const SUPPORT_WHATSAPP = '96877408996'
 
-type Props = {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
-}
-
-// 2. Type Definition to fix @ts-ignore
+// Safe Company Interface
 interface Company {
   id: string
   name: string
@@ -25,27 +21,28 @@ interface Company {
   logo_url: string | null
 }
 
+type Props = {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}
+
 export default async function MarketplaceHome(props: Props) {
   const searchParams = await props.searchParams
   
-  // Parse Params
   const category = (searchParams.category as 'car' | 'heavy') || 'car'
   const features = searchParams.features as string | undefined
   const location = searchParams.location as string | undefined
   const start = searchParams.start as string | undefined
   const end = searchParams.end as string | undefined
 
-  // 1. Safe Data Fetching (Prevent Crash)
+  // 1. Crash-Proof Data Fetching
   const results = await Promise.allSettled([
     getRentalCompanies(),
     getFleet({ category, features, location, start, end })
   ])
 
-  // Extract data safely
   const companies = results[0].status === 'fulfilled' ? results[0].value : []
   const fleet = results[1].status === 'fulfilled' ? results[1].value : []
 
-  // Helper: Is the user currently filtering?
   const isSearching = features || location || start
 
   return (
@@ -53,7 +50,6 @@ export default async function MarketplaceHome(props: Props) {
       
       {/* HERO SECTION */}
       <div className="relative bg-white border-b border-gray-200 overflow-hidden">
-        {/* PREMIUM BACKGROUND */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
             <div className="absolute top-[-50%] left-[-10%] w-[70%] h-[150%] bg-gradient-to-r from-blue-50/50 to-purple-50/50 rounded-full blur-3xl opacity-60 animate-in fade-in duration-1000" />
             <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[100%] bg-gradient-to-l from-orange-50/50 to-yellow-50/50 rounded-full blur-3xl opacity-60 animate-in fade-in duration-1000 delay-200" />
@@ -61,7 +57,6 @@ export default async function MarketplaceHome(props: Props) {
         </div>
         
         <div className="relative max-w-7xl mx-auto px-4 pt-12 pb-10 sm:px-6 lg:px-8 text-center z-10">
-          
           <div className="flex justify-center mb-8 animate-in slide-in-from-bottom-4 duration-500">
              <CategoryTabs />
           </div>
@@ -106,8 +101,6 @@ export default async function MarketplaceHome(props: Props) {
       )}
 
       <main className="max-w-7xl mx-auto px-4 py-12 space-y-16">
-
-        {/* RESULTS GRID vs SCROLLER */}
         <section className="animate-in fade-in duration-700">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
@@ -116,14 +109,11 @@ export default async function MarketplaceHome(props: Props) {
               </h2>
             </div>
             
-            {/* LOGIC SPLIT: SEARCH vs BROWSE */}
             {isSearching ? (
-                /* A. SEARCH MODE: Standard Grid */
                 fleet.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {fleet.map((car) => (
-                            // @ts-ignore - CarCard props might differ slightly, safe to ignore if it renders
-                            <CarCard key={car.id} car={car} />
+                            <CarCard key={car.id} car={car as Car} />
                         ))}
                     </div>
                 ) : (
@@ -133,54 +123,45 @@ export default async function MarketplaceHome(props: Props) {
                     </div>
                 )
             ) : (
-                /* B. BROWSE MODE: Infinite Scroller */
                 fleet.length > 0 ? (
                       <div className="-mx-4 sm:-mx-6 lg:-mx-8">
-                         <FeaturedFleetScroller fleet={fleet} />
+                         <FeaturedFleetScroller fleet={fleet as Car[]} />
                       </div>
                 ) : (
-                      // 4. Improved "Empty" Text
                       <div className="text-center py-10 text-gray-400">No featured vehicles available at the moment.</div>
                 )
             )}
         </section>
 
-        {/* RENTAL COMPANIES - SCROLLABLE ON MOBILE */}
         {!isSearching && (
             <section>
                 <div className="text-center mb-10">
                     <h2 className="text-2xl font-bold text-gray-900 mb-2">Trusted Rental Partners</h2>
                 </div>
-                {/* Horizontal scroll on mobile, grid on desktop */}
                 <div className="flex overflow-x-auto gap-4 pb-4 md:grid md:grid-cols-4 lg:grid-cols-5 md:overflow-visible no-scrollbar">
-                    {/* Explicitly cast to Company[] to fix map type errors */}
                     {(companies as Company[]).map((company) => (
                     <Link key={company.id} href={`/company/${company.slug}`} className="min-w-[160px] md:min-w-0 bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-lg hover:border-blue-100 hover:-translate-y-1 transition-all flex flex-col items-center text-center gap-4 group cursor-pointer snap-center">
-                        
                         <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-gray-400 border border-gray-200 group-hover:border-blue-200 transition-colors overflow-hidden relative shadow-sm">
                             {company.logo_url ? (
                                 <Image 
                                   src={company.logo_url} 
-                                  alt={`${company.name} logo`} // 5. Better Alt Text
+                                  alt={`${company.name} logo`} 
                                   fill 
-                                  sizes="64px" // 6. Fix Layout Shift
+                                  sizes="64px" 
                                   className="object-cover"
                                 />
                             ) : (
                                 <Building2 className="w-6 h-6" />
                             )}
                         </div>
-                        
                         <h3 className="font-bold text-gray-900 text-sm group-hover:text-blue-700 truncate w-full">{company.name}</h3>
                     </Link>
                     ))}
                 </div>
             </section>
         )}
-
       </main>
 
-      {/* Floating WhatsApp Button */}
       <a 
         href={`https://wa.me/${SUPPORT_WHATSAPP}`} 
         target="_blank" 
@@ -190,7 +171,6 @@ export default async function MarketplaceHome(props: Props) {
         <MessageCircle className="w-6 h-6 fill-white" />
         <span className="hidden md:inline font-bold">Chat with us</span>
       </a>
-
     </div>
   )
 }
