@@ -6,57 +6,57 @@ import { revalidatePath } from 'next/cache'
 export async function createCompany(formData: FormData) {
   const supabase = await createClient()
   
-  // --- 1. AUTH & DUPLICATE CHECK ---
+  // --- 1. AUTH CHECK ---
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'You must be logged in' }
 
-  // Check if user already owns a company (Rate Limit / Duplicate Protection)
-  const { data: existingProfile } = await supabase
-    .from('profiles')
-    .select('tenant_id')
-    .eq('id', user.id)
-    .single()
+  // --- 2. DUPLICATE CHECK (Hardened) ---
+  // Check the tenants table directly to see if this user owns anything
+  const { data: existingTenant } = await supabase
+    .from('tenants')
+    .select('id')
+    .eq('owner_id', user.id)
+    .maybeSingle()
 
-  if (existingProfile?.tenant_id) {
+  if (existingTenant) {
     return { error: 'You have already registered a company.' }
   }
 
-  // --- 2. INPUT VALIDATION ---
+  // --- 3. INPUT VALIDATION ---
   const companyName = formData.get('companyName') as string
   const whatsapp = formData.get('whatsapp') as string
   const address = formData.get('address') as string
+  const email = (formData.get('email') as string) || null 
 
   if (!companyName || companyName.trim().length < 3) {
     return { error: 'Company name must be at least 3 characters' }
   }
   
-  // Basic phone validation (removes spaces/dashes, checks for 8-15 digits)
   const cleanPhone = whatsapp.replace(/[\s-]/g, '')
   if (!/^\+?[0-9]{8,15}$/.test(cleanPhone)) {
     return { error: 'Please enter a valid WhatsApp number (e.g. 96812345678)' }
   }
 
-  // --- 3. SLUG GENERATION (With Collision Check) ---
+  // --- 4. SLUG GENERATION ---
   let slug = companyName.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, '')
   
-  // Check if slug exists
   const { data: existingSlugs } = await supabase
     .from('tenants')
     .select('slug')
     .ilike('slug', `${slug}%`)
 
-  // If collision found (e.g. "golden-cars" exists), append number ("golden-cars-1")
   if (existingSlugs && existingSlugs.length > 0) {
      slug = `${slug}-${existingSlugs.length + 1}`
   }
 
-  // --- 4. CREATE TENANT ---
+  // --- 5. CREATE TENANT ---
   const { data: tenant, error: tenantError } = await supabase
     .from('tenants')
     .insert({
       name: companyName.trim(),
       whatsapp_number: cleanPhone,
       address: address,
+      email: email, 
       status: 'pending', 
       slug: slug,
       owner_id: user.id
@@ -69,24 +69,21 @@ export async function createCompany(formData: FormData) {
     return { error: 'System error: Could not create company.' }
   }
 
-  // --- 5. LINK PROFILE (With Manual Rollback) ---
-  const { error: profileError } = await supabase
-    .from('profiles')
-    .update({ 
-      tenant_id: tenant.id,
-      role: 'owner' 
-    })
-    .eq('id', user.id)
+  // --- 6. LINK PROFILE (SECURE RPC) ---
+  const { error: rpcError } = await supabase
+    .rpc('attach_tenant_to_me', { p_tenant_id: tenant.id })
 
-  // 🚨 CRITICAL: If profile link fails, DELETE the company we just made
-  // This prevents "Orphaned" companies that belong to no one.
-  if (profileError) {
-    console.error('Profile Link Error:', profileError)
+  // 🚨 ROLLBACK if linking fails
+  if (rpcError) {
+    console.error('Profile Link Error:', rpcError)
+    // Clean up the tenant we just made so the user isn't stuck
     await supabase.from('tenants').delete().eq('id', tenant.id)
     return { error: 'Failed to link profile. Please try again.' }
   }
 
-  // --- 6. SUCCESS ---
-  revalidatePath('/admin') // Notify admin dashboard of new request
+  // --- 7. SUCCESS ---
+  revalidatePath('/admin') 
+  revalidatePath('/')      
+  
   return { success: true }
 }

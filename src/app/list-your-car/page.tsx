@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-// 👇 FIX 1: Import the correct function name
 import { createCompany } from './actions'
 import { Loader2, CheckCircle, Building2, MapPin, FileText, Phone, Mail, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
@@ -19,15 +18,15 @@ export default function ListYourCarPage() {
 
     const formData = new FormData(e.currentTarget)
     
-    // 👇 FIX 2: Call the correct function
     const result = await createCompany(formData)
 
     if (result?.error) {
       setError(result.error)
       setLoading(false)
     } else {
-      // Success! Redirect to dashboard
-      router.push('/vendor/dashboard')
+      // ✅ CORRECT REDIRECT: Send them to the "Under Review" page
+      // This matches the logic that pending vendors cannot access the dashboard yet.
+      router.push('/vendor/pending')
     }
   }
 
@@ -70,7 +69,6 @@ export default function ListYourCarPage() {
               />
             </div>
 
-            {/* Note: CR Number is not currently saved in actions.ts, but kept for UI completeness if you add it later */}
             <div>
               <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
                 <FileText className="w-4 h-4 text-gray-400" /> CR Number
@@ -88,7 +86,6 @@ export default function ListYourCarPage() {
               <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
                 <Phone className="w-4 h-4 text-gray-400" /> WhatsApp Number
               </label>
-              {/* 👇 FIX 3: Changed name="phone" to "whatsapp" to match actions.ts */}
               <input 
                 name="whatsapp" 
                 type="tel"
