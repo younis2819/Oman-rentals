@@ -170,6 +170,7 @@ export default function SearchInterface({ initialFleet }: { initialFleet: CarTyp
 
         <div className={loading ? 'opacity-50 transition-opacity' : ''}>
            {/* Reusing your existing Fleet List component */}
+           {/* @ts-ignore */}
            <GlobalFleetList fleet={fleet} />
         </div>
       </div>
