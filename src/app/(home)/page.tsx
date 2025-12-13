@@ -44,7 +44,12 @@ export default async function MarketplaceHome(props: Props) {
   const companies = results[0].status === 'fulfilled' ? results[0].value : []
   const fleet = results[1].status === 'fulfilled' ? results[1].value : []
 
-  const isSearching = features || location || start
+  // 🔒 FIX: Only hide partners if actually filtering by a specific city/date
+  // This ensures "All Oman" doesn't hide the trusted partners section
+  const isSearching = 
+    !!features || 
+    (location && location !== 'All Oman') || 
+    !!start
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans pb-24 md:pb-0 relative">
