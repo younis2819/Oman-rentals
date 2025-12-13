@@ -5,6 +5,7 @@ import { Car } from '@/types'
 import { getPaymobPaymentKey } from '@/utils/paymob' 
 import { sendBookingConfirmation } from '@/utils/send-email'
 import { Database } from '@/types/database.types'
+import { cookies } from 'next/headers' // 👈 Needed for City Preference
 
 // Type Definition
 type BookingWithFleet = Database['public']['Tables']['bookings']['Row'] & {
@@ -68,7 +69,7 @@ export async function getFleet(params: {
     query = query.contains('features', [params.features])
   }
 
-  // 3. Date Availability Filter (Fixed Overlap Logic)
+  // 3. Date Availability Filter
   if (params.start && params.end) {
     const { data: busy } = await supabase
       .from('bookings')
@@ -289,13 +290,11 @@ export async function getFilteredFleet(filters: {
   if (filters.maxPrice !== undefined) query = query.lte('daily_rate_omr', filters.maxPrice)
   if (filters.features && filters.features.length > 0) query = query.contains('features', filters.features)
 
-  // Date Availability (Fixed Overlap Logic)
   if (filters.startDate && filters.endDate) {
     const { data: busy } = await supabase
       .from('bookings')
       .select('car_id')
       .in('status', ['paid', 'pending', 'confirmed'])
-      // 🔒 FIX: Use lt/gt for correct interval overlap
       .lt('start_date', filters.endDate)
       .gt('end_date', filters.startDate)
 
@@ -316,4 +315,27 @@ export async function getFilteredFleet(filters: {
   }
 
   return data as Car[]
+}
+
+// --- 9. City Preference Cookie (Hybrid: ID + Name) ---
+export async function setCityPreference(locationId: string, cityName: string) {
+  const cookieStore = await cookies()
+
+  // 1. Store the ID (for database filtering)
+  cookieStore.set('or_loc_id', locationId, {
+    path: '/',
+    maxAge: 60 * 60 * 24 * 365, // 1 year
+    sameSite: 'lax',
+  })
+
+  // 2. Store the Name (for UI display without fetching DB)
+  // Sanitize to prevent header attacks
+  const safeName = (cityName || 'All Oman').trim().slice(0, 60)
+  cookieStore.set('or_city_name', safeName, {
+    path: '/',
+    maxAge: 60 * 60 * 24 * 365,
+    sameSite: 'lax',
+  })
+  
+  return { success: true }
 }
